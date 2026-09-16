@@ -179,6 +179,31 @@
     return segs;
   }
 
+  // Greedy lane allocation so overlapping activities never share a row.
+  // Two activities overlap when A.start <= B.end AND A.end >= B.start, so an
+  // item can only reuse a lane once its start is strictly after that lane's
+  // last-placed end. Input must already be sorted by start, then end.
+  // Mutates each item with `.lane` (0-based) and returns the lane count used.
+  function assignLanes(items) {
+    var laneEnds = []; // laneEnds[i] = end day of the last item placed in lane i
+    items.forEach(function (item) {
+      var placed = false;
+      for (var i = 0; i < laneEnds.length; i++) {
+        if (item.start > laneEnds[i]) {
+          laneEnds[i] = item.end;
+          item.lane = i;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        laneEnds.push(item.end);
+        item.lane = laneEnds.length - 1;
+      }
+    });
+    return Math.max(laneEnds.length, 1);
+  }
+
   // =========================================================================
   // Network / persistence
   // =========================================================================
@@ -784,13 +809,26 @@
       return;
     }
     var today = todayLocal();
+    var LANE_H = 34; // px per lane row — matches the old single-lane track height, so a month with only one activity at a time looks unchanged.
     var html = "";
     for (var m = 1; m <= 12; m++) {
       var dim = daysInMonth(state.timelineYear, m);
       var monthDocs = yearDocs.filter(function (d) { return d.month === m; });
 
-      var bars = monthDocs.map(function (d) {
+      // Sort by planned start day, then planned end day, and greedily pack
+      // overlapping activities into separate lanes so bars never cover
+      // each other — non-overlapping activities still share a lane.
+      var items = monthDocs.map(function (d) {
         var sd = Math.min(d.startDay || 1, dim), ed = Math.min(d.endDay || sd, dim);
+        if (ed < sd) ed = sd;
+        return { doc: d, start: sd, end: ed };
+      }).sort(function (a, b) { return (a.start - b.start) || (a.end - b.end); });
+      var laneCount = assignLanes(items);
+      var trackHeight = laneCount * LANE_H;
+
+      var bars = items.map(function (it) {
+        var d = it.doc, sd = it.start, ed = it.end;
+        var top = it.lane * LANE_H;
         var left = ((sd - 1) / dim * 100).toFixed(2), width = Math.max(((ed - sd + 1) / dim * 100), 2.2).toFixed(2);
         var g = CATEGORY_GROUPS.indexOf(d.categoryGroup) >= 0 ? d.categoryGroup : "Other";
         var info = computeDelayInfo(d, today);
@@ -798,15 +836,16 @@
         var iconHtml = icon ? '<span class="dly-ico" aria-hidden="true">' + icon + '</span> ' : "";
 
         var tip = escapeHtml(d.activity) +
-          "\nCategory: " + escapeHtml(d.category) +
-          "\nResponsible: " + escapeHtml(d.responsiblePerson || "—") +
-          "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) +
-          "\nActual: " + (d.actualStart || d.actualEnd ? prettyDate(d.actualStart) + " – " + prettyDate(d.actualEnd) : "—") +
+          "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
+          "\nPlanned Start: " + prettyDate(d.startDate) +
+          "\nPlanned End: " + prettyDate(d.endDate) +
+          "\nActual Start: " + (d.actualStart ? prettyDate(d.actualStart) : "—") +
+          "\nActual End: " + (d.actualEnd ? prettyDate(d.actualEnd) : "—") +
           "\nStatus: " + escapeHtml(d.status) + " (" + info.label + ")" +
-          (info.delayDays > 0 ? "\nDelay: " + info.delayDays + " day" + (info.delayDays === 1 ? "" : "s") + " (~" + Math.ceil(info.delayDays / 7) + " wk)" : "");
+          "\nDelay Days: " + (info.delayDays > 0 ? info.delayDays : 0);
 
         var plannedBar = '<div class="bar ' + statusClass(d.status) + ' code-' + info.code + '" data-row="row-' + d.id + '" tabindex="0" role="button" ' +
-          'style="left:' + left + '%; width:' + width + '%; background-color:' + groupColor(g) + ';" ' +
+          'style="left:' + left + '%; width:' + width + '%; top:' + (top + 2) + 'px; background-color:' + groupColor(g) + ';" ' +
           'title="' + tip + '">' + iconHtml + escapeHtml(d.activity) + '</div>';
 
         var actualBar = "";
@@ -818,7 +857,7 @@
             var aed = (aedDate.getFullYear() === state.timelineYear && (aedDate.getMonth() + 1) === m) ? Math.min(aedDate.getDate(), dim) : dim;
             var aLeft = ((asd - 1) / dim * 100).toFixed(2), aWidth = Math.max(((aed - asd + 1) / dim * 100), 2.2).toFixed(2);
             actualBar = '<div class="bar-actual code-' + info.code + '" data-row="row-' + d.id + '" ' +
-              'style="left:' + aLeft + '%; width:' + aWidth + '%; background-color:' + groupColor(g) + ';" title="' + tip + '"></div>';
+              'style="left:' + aLeft + '%; width:' + aWidth + '%; top:' + (top + 20) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '"></div>';
           }
         }
         return plannedBar + actualBar;
@@ -831,11 +870,11 @@
       }).join("");
 
       html += '<div class="tl-group">' +
-        '<div class="tl-month"><div class="lbl">' + MONTH_ABBR[m - 1] + '</div><div class="tl-track">' + (bars || "") + '</div></div>' +
+        '<div class="tl-month"><div class="lbl">' + MONTH_ABBR[m - 1] + '</div><div class="tl-track" style="height:' + trackHeight + 'px;">' + (bars || "") + '</div></div>' +
         '<div class="tl-weekrow"><div class="lbl"></div><div class="tl-weekscale">' + weeks + '</div></div>' +
         '</div>';
     }
-    els.timelineBody.innerHTML = html;
+    els.timelineBody.innerHTML = '<div class="tl-scroll">' + html + '</div>';
     els.timelineBody.querySelectorAll(".bar, .bar-actual").forEach(function (b) {
       b.addEventListener("click", function () { jumpToActivity(b.getAttribute("data-row")); });
       b.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); jumpToActivity(b.getAttribute("data-row")); } });

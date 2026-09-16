@@ -134,10 +134,13 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .tl-group:last-child{border-bottom:none;}
 .tl-month{display:grid; grid-template-columns:52px 1fr; gap:10px; align-items:center; padding:5px 0;}
 .tl-month .lbl{font-size:12px; color:var(--muted); font-weight:600; text-align:right;}
-.tl-track{position:relative; height:34px; background:var(--paper); border-radius:6px; border:1px solid var(--line);}
+/* Height is set inline per month (lane count × row height) so a month with
+   several overlapping activities automatically grows taller — see
+   assignLanes()/renderTimeline() in app.js. min-height is just a fallback. */
+.tl-track{position:relative; min-height:34px; background:var(--paper); border-radius:6px; border:1px solid var(--line); transition:height .15s;}
 .bar{
-  position:absolute; top:2px; height:16px; border-radius:5px; cursor:pointer;
-  opacity:.92; display:flex; align-items:center; overflow:hidden; white-space:nowrap;
+  position:absolute; height:16px; border-radius:5px; cursor:pointer;
+  opacity:.92; display:flex; align-items:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
   font-size:10px; color:#fff; padding:0 6px; font-weight:500; gap:3px;
   box-shadow:0 1px 2px rgba(0,0,0,.15); transition:transform .1s, opacity .1s;
   border-bottom:3px solid transparent;
@@ -160,6 +163,10 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 }
 .bar-actual.code-rescheduled{outline:1px dashed var(--st-delayed); outline-offset:-1px;}
 .tl-empty{color:var(--muted); font-size:13px; padding:16px 0;}
+/* Lets the timeline scroll horizontally on narrow screens instead of
+   squeezing activity bars/labels down to unreadable widths. */
+#timelineBody{overflow-x:auto;}
+.tl-scroll{min-width:640px;}
 
 .tl-weekrow{display:grid; grid-template-columns:52px 1fr; gap:10px; padding:0 0 6px;}
 .tl-weekscale{position:relative; height:14px;}
