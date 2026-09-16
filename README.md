@@ -1,8 +1,15 @@
-# NQEMT-2 Activity Tracker — GitHub Pages + Google Sheets
+# NQEMT-2 Activity Management System — GitHub Pages + Google Sheets
 
-Same tracker as before, rebuilt on the architecture you spotted in the Kampong Chhnang
-feedback site: a static site (hosted free on GitHub Pages) reading and writing a
-Google Sheet through a small Google Apps Script backend. No servers, no hosting bills.
+A static site (hosted free on GitHub Pages) reading and writing a Google Sheet
+through a small Google Apps Script backend. No servers, no hosting bills.
+
+**Phase 1 of the Activity Management System upgrade is in this folder**:
+sidebar navigation, a filterable Dashboard, full Activities management
+(search/filter/sort/paginate/export, with View/Edit/Delete/Duplicate), an
+Add/Edit Activity form, the auto delay engine, and the improved Schedule
+Timeline. **Calendar (month/week/day) and Reports are Phase 2**, coming next —
+their nav items are already there with a placeholder for Reports, and the
+Timeline nav item carries today's Schedule Timeline.
 
 ## What's already done
 
@@ -10,73 +17,161 @@ Google Sheet through a small Google Apps Script backend. No servers, no hosting 
   Drive (longsophal@gmail.com), pre-loaded with all 128 activities.
   https://docs.google.com/spreadsheets/d/1OSKJYMr4HOmDbWK04OQKHn2ojbnBLpUtKmlzSANwAks/edit
 - ✅ **The site code** (this folder) — ready to publish as-is.
-- ✅ **The Apps Script backend code** (`apps-script/Code.gs`) — ready to paste in.
+- ✅ **The Apps Script backend code** (`apps-script/Code.gs`) — ready to paste in,
+  now with full create/update/delete support, not just single-field edits.
 
 ## What you need to do (needs your own Google + GitHub logins, so I can't do these for you)
 
-### 1. Deploy the Apps Script backend (~3 minutes)
+### 1. Add the new columns to the Google Sheet
+
+Open the Sheet and add these header names in the next empty cells of row 1,
+spelled **exactly** like this (case-sensitive — the script reads the header
+row to build the JSON, so header text becomes the field name):
+
+- `description`
+- `responsiblePerson`
+- `supportingTeam`
+- `priority`
+- `delayOverrideDays`
+
+(If you did the earlier Timeline update, `actualStart` and `actualEnd`
+should already be there too — if not, add those as well.) Any of these you
+skip just won't be saved when you add/edit an activity from the site — the
+rest still works.
+
+### 2. Deploy the Apps Script backend (~3 minutes)
 
 1. Open the Sheet (link above) → **Extensions → Apps Script**.
 2. Delete the placeholder `Code.gs` content and paste in the contents of
-   `apps-script/Code.gs` from this folder.
+   `apps-script/Code.gs` from this folder (this is a full replacement — it
+   now handles create/update/delete, not just single-field edits).
 3. Check the tab name: at the bottom of the spreadsheet the single tab is
    probably called **Sheet1** — if you renamed it, update the `SHEET_NAME`
    constant at the top of the script to match.
-4. Click **Deploy → New deployment**.
-   - Type: **Web app**
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-5. Click **Deploy**, then **Authorize access** and approve the consent screen
-   (it'll warn "Google hasn't verified this app" — that's normal for your own
-   script; click **Advanced → Go to (project name)** to proceed).
-6. Copy the **Web app URL** (ends in `/exec`).
+4. If you already have a deployment: **Deploy → Manage deployments → edit
+   (pencil) → New version → Deploy** (editing the script alone never updates
+   a live `/exec` URL). If this is your first time: **Deploy → New
+   deployment** → type **Web app** → Execute as **Me** → Who has access
+   **Anyone** → **Deploy** → **Authorize access** (approve the "Google
+   hasn't verified this app" warning via **Advanced → Go to (project
+   name)**) → copy the **Web app URL** (ends in `/exec`).
 
-### 2. Point the site at it
+### 3. Point the site at it
 
-Open `config.js` in this folder and replace the placeholder with the URL you
-just copied:
+Open `config.js` and make sure `API_URL` has your real deployed URL (already
+done if you set this up before):
 
 ```js
 const API_URL = "https://script.google.com/macros/s/AKfycb.../exec";
 ```
 
-### 3. Put it on GitHub Pages (~2 minutes)
+### 4. Put it on GitHub Pages
 
-I don't have a GitHub connection in this session, so this part is on you:
+Upload/overwrite these files at the repo root: `index.html`, `styles.css`,
+`app.js`, `data.js`, `config.js`, and `apps-script/Code.gs` (in its
+subfolder) — same filenames, same locations as before. GitHub Pages picks up
+the change automatically once committed.
 
-1. Create a new repository on GitHub (e.g. `nqemt2-tracker`) — public, so
-   Pages can serve it for free.
-2. Upload these files to the repo root: `index.html`, `styles.css`,
-   `app.js`, `data.js`, `config.js` (with your real API_URL already pasted in).
-   Easiest way: on the repo page, **Add file → Upload files**, then drag in
-   all of them from this folder, and commit.
-3. Go to **Settings → Pages** in the repo. Under "Build and deployment",
-   set **Source: Deploy from a branch**, branch **main**, folder **/ (root)**,
-   then **Save**.
-4. GitHub gives you a URL like `https://<your-username>.github.io/nqemt2-tracker/`
-   — that's your live tracker, shareable with anyone.
+## What's new in this update
 
-### Keeping it updated later
+### Sidebar navigation
 
-- Edit statuses/notes/dates either straight in the Google Sheet, or through
-  the site itself (both write to the same Sheet).
-- If you ever edit `Code.gs` again, you must **Deploy → Manage deployments →
-  edit (pencil) → New version** — saving the script alone does not update
-  the live URL.
+A left sidebar (collapses to a hamburger menu on phones/narrow screens) with
+six sections: **Dashboard**, **Activities**, **Calendar / Timeline**, **Add
+Activity**, **Reports** (Phase 2 placeholder), **Settings**.
+
+### Dashboard
+
+KPI cards (Total, Completed, In Progress, Upcoming, Delayed, Overdue) and
+four charts (by month, by status, by category, planned vs. actual), plus a
+Delay Summary — all computed live from whatever the Year / Month / Category
+/ Responsible Person / Status filters at the top currently select.
+
+A note on two KPIs that sound similar: **Delayed** counts activities that
+*finished* late (an actual end date recorded after the planned end).
+**Overdue** counts activities that are *currently* late — the planned end
+date has passed and there's no actual end date yet. Let me know if you'd
+rather these be defined differently.
+
+### Activities page
+
+The searchable/filterable/sortable table now has an ID column, a
+Responsible column, a Delay column (auto-computed), pagination (10/25/50/100
+rows per page), and an Action column with **View** (read-only details),
+**Edit** (opens the Add/Edit form pre-filled), **Duplicate** (opens the form
+pre-filled as a new copy, status reset to Planned, nothing saved until you
+submit), and **Delete** (asks for confirmation first). Export CSV now
+includes every new field.
+
+### Add / Edit Activity form
+
+All the fields from your spec: Activity Name, Description, Category,
+Responsible Person, Supporting Person/Team, Priority, Status, Planned
+Start/End, Actual Start/End, Remarks. The Activity ID is generated
+automatically (shown read-only when editing). Category, Responsible Person,
+and Supporting Team are free-text with autocomplete suggestions drawn from
+your existing data (they're not fixed lists, since your organization doesn't
+have one predefined) — Category Group (used for chart colors) is guessed
+automatically from the category text. Year/month/week position for the
+timeline are worked out automatically from the Planned dates — you don't
+enter them.
+
+There's also an optional **Delay override (days)** field, per the spec's
+"don't allow typing the delay unless there's an override field" — leave it
+blank and delay is auto-computed from dates; fill it in only if you need to
+force a specific delay figure.
+
+### Delay engine (unchanged from the Timeline update, used everywhere now)
+
+- **On Time** — planned end date hasn't passed yet, no actual dates entered.
+- **Delayed** — planned end date has passed and no actual end date is
+  recorded yet.
+- **Completed** — an actual end date is recorded on/before the planned end.
+- **Completed (delayed)** — an actual end date is recorded, but after the
+  planned end.
+- **Rescheduled** — the actual period doesn't overlap the planned period at
+  all.
+- **Cancelled** — driven by the Status field, same as before.
+
+### Timeline (unchanged from the last update)
+
+Delay/status badges on each bar, a weekly period scale under each month,
+planned-vs-actual bars when they differ, a Delay Summary, and a legend.
+Clicking a bar jumps to that activity in the Activities table.
+
+### Settings
+
+Light / dark / system theme toggle (remembered per browser), a link to open
+the Google Sheet directly, a live/demo connection indicator, and the current
+activity count.
+
+## Known limitations to flag now
+
+- The timeline draws each activity within a single month (day-of-month
+  position). An activity whose Planned End spans into the next month still
+  saves correctly and shows correctly everywhere else, but its timeline bar
+  is drawn through the end of its start month. Let me know if activities
+  routinely span multiple months and I'll rework the timeline to handle it.
+- There's still no login/auth on the Apps Script endpoint (same as before) —
+  anyone with the URL can read and write the Sheet. That was an accepted
+  trade-off for the "no servers" approach; happy to add a shared-secret
+  check if you want one.
+- Calendar (month/week/day views) and the Reports section are Phase 2 — the
+  nav items exist now so the sidebar won't need to change shape later.
 
 ## Files in this folder
 
 | File | Purpose |
 |---|---|
-| `index.html` | The page itself |
+| `index.html` | The page itself (sidebar, all six sections) |
 | `styles.css` | All styling |
-| `app.js` | Chart, timeline, table, and save-to-Sheet logic |
+| `app.js` | Routing, dashboard, activities, timeline, form, and save-to-Sheet logic |
 | `data.js` | Bundled sample snapshot (used only until `config.js` is set — lets the page work immediately after upload, before you deploy the script) |
-| `config.js` | **Edit this** — one line, your Apps Script URL |
+| `config.js` | **Edit this** — your Apps Script URL, and optionally your Sheet's URL |
 | `apps-script/Code.gs` | Paste into the Sheet's Apps Script editor |
 
 ## Note on the CSV export button
 
-Unlike the Claude-hosted version, this is a real static page, so the Export
-CSV button downloads a normal file straight from the browser — no extra
-setup needed.
+This is a real static page, so the Export CSV button (visible on the
+Activities page) downloads a normal file straight from the browser — no
+extra setup needed.

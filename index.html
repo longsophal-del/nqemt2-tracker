@@ -3,80 +3,271 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NQEMT-2 Activity Tracker</title>
-<meta name="description" content="Live activity tracker for the NQEMT-2 programme schedule (2024–2026): monthly chart, timeline, and an editable table backed by Google Sheets.">
+<title>NQEMT-2 Activity Management System</title>
+<meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): dashboard, activities, timeline, and reports, backed by Google Sheets.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div class="titles">
-      <h1>NQEMT-2 Activity Tracker</h1>
-      <div class="sub">Training, coaching, QIWG and partner activities for Cambodia's National Quality Enhancement for Maternal &amp; Child Health Tools (NQEMT-2) programme, 2024–2026. Edits save straight to the Google Sheet.</div>
-    </div>
-    <div class="top-actions">
-      <button class="btn" id="exportBtn" title="Download the current filtered list as a CSV file">⬇ Export CSV</button>
-    </div>
-  </header>
-
-  <div id="syncBanner" class="sync-banner" hidden></div>
-
-  <div class="stats">
-    <div class="stat total"><div class="n" id="statTotal">—</div><div class="l">Total activities</div></div>
-    <div class="stat completed"><div class="n" id="statCompleted">—</div><div class="l">Completed</div></div>
-    <div class="stat progress"><div class="n" id="statProgress">—</div><div class="l">In progress</div></div>
-    <div class="stat planned"><div class="n" id="statPlanned">—</div><div class="l">Planned</div></div>
-    <div class="stat rate"><div class="n" id="statRate">—</div><div class="l">Completion rate</div></div>
-  </div>
-
-  <section id="chartSection">
-    <div class="chart-head">
-      <div>
-        <h2>Activities by month and category</h2>
-        <div class="hint">Count of activities scheduled each month, split by category.</div>
+<div class="shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">🗓️</div>
+      <div class="brand-text">
+        <div class="brand-title">NQEMT-2</div>
+        <div class="brand-sub">Activity Management</div>
       </div>
-      <div class="year-toggle" id="yearToggle"></div>
     </div>
-    <div class="chart-scroll"><svg id="chartSvg" viewBox="0 0 960 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
-    <div class="legend" id="chartLegend"></div>
-  </section>
+    <nav class="nav" id="mainNav">
+      <button class="nav-item" data-route="dashboard">📊 <span>Dashboard</span></button>
+      <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
+      <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button>
+      <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
+      <button class="nav-item" data-route="reports">📈 <span>Reports</span></button>
+      <button class="nav-item" data-route="settings">⚙️ <span>Settings</span></button>
+    </nav>
+    <div class="sidebar-foot" id="sidebarSync">—</div>
+  </aside>
 
-  <section id="timelineSection">
-    <h2>Schedule timeline</h2>
-    <div class="hint" id="timelineHint">Day-by-day view for the selected year — click a bar to jump to it in the table below.</div>
-    <div id="timelineBody"></div>
-  </section>
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+      <div class="topbar-title" id="routeTitle">Dashboard</div>
+      <div class="topbar-actions">
+        <button class="btn" id="exportBtn" hidden title="Download the current filtered list as a CSV file">⬇ Export CSV</button>
+      </div>
+    </header>
 
-  <section id="tableSection">
-    <h2>All activities</h2>
-    <div class="hint">Update Status, Notes or the Actual Date directly — changes save to the Google Sheet automatically.</div>
-    <div class="filters" style="margin-bottom:12px;">
-      <input type="search" id="searchInput" placeholder="Search activity or notes…">
-      <select id="filterYear"><option value="">All years</option></select>
-      <select id="filterCategory"><option value="">All categories</option></select>
-      <select id="filterStatus"><option value="">All statuses</option></select>
-      <span class="count" id="rowCount"></span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th data-sort="start">Start</th>
-            <th data-sort="end">End</th>
-            <th data-sort="activity">Activity</th>
-            <th data-sort="category">Category</th>
-            <th data-sort="status">Status</th>
-            <th>Notes</th>
-            <th>Actual date</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
-  </section>
+    <div id="syncBanner" class="sync-banner" hidden></div>
 
-  <footer class="note">Source: NQEMT-2 schedule workbook, backed by the "NQEMT-2 Activities" Google Sheet. Categories were auto-assigned from activity names and can be refined over time.</footer>
+    <main class="content">
+
+      <!-- ============ DASHBOARD ============ -->
+      <section id="view-dashboard" class="view">
+        <div class="filters dash-filters">
+          <select id="dfYear"></select>
+          <select id="dfMonth"><option value="">All months</option></select>
+          <select id="dfCategory"><option value="">All categories</option></select>
+          <select id="dfResponsible"><option value="">All responsible people</option></select>
+          <select id="dfStatus"><option value="">All statuses</option></select>
+          <button class="btn" id="dfReset" title="Clear all dashboard filters">✕ Reset filters</button>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="chart-grid">
+          <section class="chart-card">
+            <h2>Activities by month</h2>
+            <div class="hint">Count of activities scheduled each month, split by category.</div>
+            <div class="chart-scroll"><svg id="chartMonth" viewBox="0 0 960 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
+            <div class="legend" id="chartMonthLegend"></div>
+          </section>
+          <section class="chart-card">
+            <h2>Activities by status</h2>
+            <div class="hint">How many activities currently sit in each status.</div>
+            <div class="chart-scroll"><svg id="chartStatus" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by status"></svg></div>
+          </section>
+          <section class="chart-card">
+            <h2>Activities by category</h2>
+            <div class="hint">Count of activities per category.</div>
+            <div class="chart-scroll"><svg id="chartCategory" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by category"></svg></div>
+          </section>
+          <section class="chart-card">
+            <h2>Planned vs. actual</h2>
+            <div class="hint">Each month's planned activities vs. how many finished on time.</div>
+            <div class="chart-scroll"><svg id="chartPlannedActual" viewBox="0 0 960 280" role="img" aria-label="Bar chart of planned vs actual activities per month"></svg></div>
+            <div class="legend" id="chartPlannedActualLegend"></div>
+          </section>
+        </div>
+
+        <section class="chart-card">
+          <h2>Delay summary</h2>
+          <div class="hint">Auto-computed from Planned vs. Actual dates across the filtered activities.</div>
+          <div class="delay-summary" id="dashDelaySummary"></div>
+        </section>
+      </section>
+
+      <!-- ============ ACTIVITIES ============ -->
+      <section id="view-activities" class="view" hidden>
+        <section>
+          <div class="filters" style="margin-bottom:12px;">
+            <input type="search" id="searchInput" placeholder="Search activity, notes, or responsible person…">
+            <select id="filterYear"><option value="">All years</option></select>
+            <select id="filterCategory"><option value="">All categories</option></select>
+            <select id="filterResponsible"><option value="">All responsible people</option></select>
+            <select id="filterStatus"><option value="">All statuses</option></select>
+            <span class="count" id="rowCount"></span>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th data-sort="id">ID</th>
+                  <th data-sort="activity">Activity</th>
+                  <th data-sort="category">Category</th>
+                  <th data-sort="responsible">Responsible</th>
+                  <th data-sort="start">Planned period</th>
+                  <th>Actual period</th>
+                  <th data-sort="status">Status</th>
+                  <th>Delay</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pagination"></div>
+        </section>
+      </section>
+
+      <!-- ============ TIMELINE ============ -->
+      <section id="view-timeline" class="view" hidden>
+        <section id="timelineSection">
+          <div class="chart-head">
+            <div>
+              <h2>Schedule timeline</h2>
+              <div class="hint" id="timelineHint">Day-by-day view for the selected year — click a bar to jump to it in the table below.</div>
+            </div>
+            <div class="year-toggle" id="yearToggle"></div>
+          </div>
+          <div id="timelineBody"></div>
+          <div class="tl-legend legend" id="timelineLegend"></div>
+          <div class="delay-summary" id="delaySummary"></div>
+        </section>
+      </section>
+
+      <!-- ============ ADD / EDIT ACTIVITY ============ -->
+      <section id="view-add" class="view" hidden>
+        <section>
+          <h2 id="addFormTitle">Add activity</h2>
+          <div class="hint" id="addFormHint">Fields marked * are required. Year/month and week position are worked out automatically from the planned dates.</div>
+          <form id="activityForm">
+            <div class="form-grid">
+              <div class="field" id="idField" hidden>
+                <label>Activity ID</label>
+                <input type="text" id="fId" disabled>
+              </div>
+              <div class="field">
+                <label for="fName">Activity name *</label>
+                <input type="text" id="fName" required placeholder="e.g. Training HC staff 6">
+              </div>
+              <div class="field field-wide">
+                <label for="fDescription">Description</label>
+                <textarea id="fDescription" rows="2" placeholder="Optional details about this activity"></textarea>
+              </div>
+              <div class="field">
+                <label for="fCategory">Category *</label>
+                <input type="text" id="fCategory" list="categoryList" required placeholder="e.g. Coaching">
+                <datalist id="categoryList"></datalist>
+              </div>
+              <div class="field">
+                <label for="fResponsible">Responsible person</label>
+                <input type="text" id="fResponsible" list="responsibleList" placeholder="e.g. Dr. Sophal">
+                <datalist id="responsibleList"></datalist>
+              </div>
+              <div class="field">
+                <label for="fSupporting">Supporting person / team</label>
+                <input type="text" id="fSupporting" list="supportingList" placeholder="e.g. Provincial QI team">
+                <datalist id="supportingList"></datalist>
+              </div>
+              <div class="field">
+                <label for="fPriority">Priority *</label>
+                <select id="fPriority" required>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fStatus">Status *</label>
+                <select id="fStatus" required></select>
+              </div>
+              <div class="field">
+                <label for="fPlannedStart">Planned start date *</label>
+                <input type="date" id="fPlannedStart" required>
+              </div>
+              <div class="field">
+                <label for="fPlannedEnd">Planned end date *</label>
+                <input type="date" id="fPlannedEnd" required>
+              </div>
+              <div class="field">
+                <label for="fActualStart">Actual start date</label>
+                <input type="date" id="fActualStart">
+              </div>
+              <div class="field">
+                <label for="fActualEnd">Actual end date</label>
+                <input type="date" id="fActualEnd">
+              </div>
+              <div class="field">
+                <label for="fDelayOverride">Delay override (days, optional)</label>
+                <input type="number" id="fDelayOverride" placeholder="Leave blank to auto-compute from dates">
+              </div>
+              <div class="field field-wide">
+                <label for="fRemarks">Remarks</label>
+                <textarea id="fRemarks" rows="2" placeholder="Optional notes"></textarea>
+              </div>
+            </div>
+            <div id="formMsg" class="form-msg" hidden></div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="formSubmitBtn">Save activity</button>
+              <button type="button" class="btn" id="formCancelBtn" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </section>
+      </section>
+
+      <!-- ============ REPORTS (Phase 2) ============ -->
+      <section id="view-reports" class="view" hidden>
+        <section>
+          <h2>Reports</h2>
+          <div class="placeholder-card">
+            📈 Reports are coming in the next update — Monthly Activity, Activity Status, Delay, Responsible Person, Category, and Planned vs. Actual reports, each with filters and export.
+          </div>
+        </section>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section id="view-settings" class="view" hidden>
+        <section>
+          <h2>Settings</h2>
+          <div class="settings-grid">
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Theme</div>
+                <div class="hint">Choose light, dark, or match your system.</div>
+              </div>
+              <div class="theme-toggle" id="themeToggle">
+                <button data-theme-choice="light">Light</button>
+                <button data-theme-choice="dark">Dark</button>
+                <button data-theme-choice="system">System</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Data source</div>
+                <div class="hint" id="settingsDataSource">—</div>
+              </div>
+              <a class="btn" id="openSheetBtn" href="#" target="_blank" rel="noopener">Open Google Sheet ↗</a>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Activity count</div>
+                <div class="hint" id="settingsCount">—</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+    </main>
+
+    <footer class="note">Source: NQEMT-2 schedule workbook, backed by the "NQEMT-2 Activities" Google Sheet. Categories were auto-assigned from activity names and can be refined over time.</footer>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop" hidden>
+  <div class="modal" id="modalBody"></div>
 </div>
 
 <script src="config.js"></script>
