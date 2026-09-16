@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NQEMT-2 Activity Tracker</title>
+<meta name="description" content="Live activity tracker for the NQEMT-2 programme schedule (2024–2026): monthly chart, timeline, and an editable table backed by Google Sheets.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="titles">
+      <h1>NQEMT-2 Activity Tracker</h1>
+      <div class="sub">Training, coaching, QIWG and partner activities for Cambodia's National Quality Enhancement for Maternal &amp; Child Health Tools (NQEMT-2) programme, 2024–2026. Edits save straight to the Google Sheet.</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="exportBtn" title="Download the current filtered list as a CSV file">⬇ Export CSV</button>
+    </div>
+  </header>
+
+  <div id="syncBanner" class="sync-banner" hidden></div>
+
+  <div class="stats">
+    <div class="stat total"><div class="n" id="statTotal">—</div><div class="l">Total activities</div></div>
+    <div class="stat completed"><div class="n" id="statCompleted">—</div><div class="l">Completed</div></div>
+    <div class="stat progress"><div class="n" id="statProgress">—</div><div class="l">In progress</div></div>
+    <div class="stat planned"><div class="n" id="statPlanned">—</div><div class="l">Planned</div></div>
+    <div class="stat rate"><div class="n" id="statRate">—</div><div class="l">Completion rate</div></div>
+  </div>
+
+  <section id="chartSection">
+    <div class="chart-head">
+      <div>
+        <h2>Activities by month and category</h2>
+        <div class="hint">Count of activities scheduled each month, split by category.</div>
+      </div>
+      <div class="year-toggle" id="yearToggle"></div>
+    </div>
+    <div class="chart-scroll"><svg id="chartSvg" viewBox="0 0 960 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
+    <div class="legend" id="chartLegend"></div>
+  </section>
+
+  <section id="timelineSection">
+    <h2>Schedule timeline</h2>
+    <div class="hint" id="timelineHint">Day-by-day view for the selected year — click a bar to jump to it in the table below.</div>
+    <div id="timelineBody"></div>
+  </section>
+
+  <section id="tableSection">
+    <h2>All activities</h2>
+    <div class="hint">Update Status, Notes or the Actual Date directly — changes save to the Google Sheet automatically.</div>
+    <div class="filters" style="margin-bottom:12px;">
+      <input type="search" id="searchInput" placeholder="Search activity or notes…">
+      <select id="filterYear"><option value="">All years</option></select>
+      <select id="filterCategory"><option value="">All categories</option></select>
+      <select id="filterStatus"><option value="">All statuses</option></select>
+      <span class="count" id="rowCount"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="start">Start</th>
+            <th data-sort="end">End</th>
+            <th data-sort="activity">Activity</th>
+            <th data-sort="category">Category</th>
+            <th data-sort="status">Status</th>
+            <th>Notes</th>
+            <th>Actual date</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="note">Source: NQEMT-2 schedule workbook, backed by the "NQEMT-2 Activities" Google Sheet. Categories were auto-assigned from activity names and can be refined over time.</footer>
+</div>
+
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
