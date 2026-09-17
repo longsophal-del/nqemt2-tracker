@@ -119,6 +119,12 @@ the live Apps Script fetch takes on a slow connection. Before this, the
 page would just sit there with an empty, unfilled Dashboard while data was
 still loading.
 
+The main content column also uses more of the screen on large/wide
+monitors now (max width raised from 1280px to 1800px), so there's much
+less empty space on either side — most noticeable on the Schedule
+Timeline, which now fits an extra month or so on screen before you need
+to scroll.
+
 ### Dashboard
 
 KPI cards (Total, Completed, In Progress, Upcoming, Delayed, Overdue) and
