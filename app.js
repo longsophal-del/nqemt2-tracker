@@ -1288,7 +1288,7 @@
   // via horizontal scroll, and the Activities column pinned via CSS sticky
   // positioning so it stays visible while scrolling.
   // =========================================================================
-  var SCH_COL_PX = 64; // fixed px width per week column in the Gantt grid
+  var SCH_COL_PX = 110; // fixed px width per week column in the Gantt grid
   // Week columns are REAL Sunday–Saturday calendar weeks (the same weeks
   // you'd see on any calendar) — not an artificial even split of each
   // month's day count. A week that straddles two months (e.g. the week
