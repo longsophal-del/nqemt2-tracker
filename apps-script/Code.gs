@@ -35,13 +35,22 @@
  * generic way as the Activities tab, selected via a "sheet":"categories"
  * flag on each request instead of a different endpoint.
  *
- * SETUP HELPER
+ * SETUP HELPERS
  * Don't want to add the columns/tab above by hand? After pasting this file
  * in, pick "setupSheet" from the function dropdown at the top of the Apps
  * Script editor (next to "Debug") and click "Run". It adds any missing
  * Activities headers and creates the Categories tab if needed — it never
  * touches or removes existing data, and is safe to run more than once.
  * The first run will ask you to authorize the script (same as deploying).
+ *
+ * The Categories tab starts out empty — that's normal, not a bug — the
+ * Category page will show "0 categories" until it has rows. Once
+ * setupSheet has run, pick "seedCategoriesFromActivities" from the same
+ * dropdown and click Run: it scans every category name already used across
+ * your activities, works out each one's most common chart-color group, and
+ * adds one row per category to the Categories tab. It only adds names that
+ * aren't already there, so it's safe to run again later after you add new
+ * activities with new category names.
  */
 
 const SHEET_ID = '1OSKJYMr4HOmDbWK04OQKHn2ojbnBLpUtKmlzSANwAks'; // NQEMT-2 Activities
@@ -221,6 +230,79 @@ function setupSheet() {
     'Setup complete.\nActivities headers added: ' +
     (missingActivityHeaders.length ? missingActivityHeaders.join(', ') : '(none needed, already present)') +
     '.\nCategories tab: ' + (categoriesCreated ? 'created new' : 'already existed, checked headers') + '.'
+  );
+}
+
+/**
+ * One-time setup helper — run this once (after setupSheet) to populate the
+ * Categories tab from the category names already used in your activities.
+ * For each unique category name found in Sheet1, it works out the most
+ * common categoryGroup value paired with it (falling back to "Other") and
+ * appends one row. Existing rows in the Categories tab are left untouched;
+ * it only adds names that aren't already there, so it's safe to re-run
+ * after adding new activities with new category names.
+ */
+function seedCategoriesFromActivities() {
+  const VALID_GROUPS = ['Training & Workshops', 'QIWG', 'Coaching', 'Meetings & Partners', 'Assessment', 'Other'];
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error('"' + SHEET_NAME + '" tab not found — check the SHEET_NAME constant at the top of this file.');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const catCol = headers.indexOf('category');
+  const groupCol = headers.indexOf('categoryGroup');
+  if (catCol === -1) throw new Error('"' + SHEET_NAME + '" has no "category" column — run setupSheet first.');
+
+  const tally = {}; // name -> { groupName: count }
+  for (let r = 1; r < data.length; r++) {
+    const name = String(data[r][catCol] || '').trim();
+    if (!name) continue;
+    const rawGroup = groupCol !== -1 ? String(data[r][groupCol] || '').trim() : '';
+    const group = VALID_GROUPS.indexOf(rawGroup) >= 0 ? rawGroup : 'Other';
+    if (!tally[name]) tally[name] = {};
+    tally[name][group] = (tally[name][group] || 0) + 1;
+  }
+
+  const catSheet = ss.getSheetByName(CATEGORIES_SHEET_NAME);
+  if (!catSheet) throw new Error('"' + CATEGORIES_SHEET_NAME + '" tab not found — run setupSheet first.');
+  const catData = catSheet.getDataRange().getValues();
+  const catHeaders = catData[0] || [];
+  const nameCol = catHeaders.indexOf('name');
+  const idColC = catHeaders.indexOf('id');
+  const groupColC = catHeaders.indexOf('group');
+  if (nameCol === -1 || idColC === -1 || groupColC === -1) {
+    throw new Error('"' + CATEGORIES_SHEET_NAME + '" tab is missing id/name/group headers — run setupSheet first.');
+  }
+
+  const existingNames = {};
+  let maxId = 0;
+  for (let r = 1; r < catData.length; r++) {
+    const n = String(catData[r][nameCol] || '').trim();
+    if (n) existingNames[n] = true;
+    const idNum = parseInt(catData[r][idColC], 10);
+    if (!isNaN(idNum) && idNum > maxId) maxId = idNum;
+  }
+
+  const newRows = [];
+  Object.keys(tally).sort().forEach(function (name) {
+    if (existingNames[name]) return;
+    const counts = tally[name];
+    let bestGroup = 'Other', bestCount = -1;
+    Object.keys(counts).forEach(function (g) {
+      if (counts[g] > bestCount) { bestCount = counts[g]; bestGroup = g; }
+    });
+    maxId += 1;
+    newRows.push([String(maxId), name, bestGroup]);
+  });
+
+  if (newRows.length) {
+    catSheet.getRange(catSheet.getLastRow() + 1, 1, newRows.length, 3).setValues(newRows);
+  }
+
+  Logger.log(
+    'Seed complete. Categories added: ' + newRows.length +
+    (newRows.length ? ' (' + newRows.map(function (r) { return r[1]; }).join(', ') + ')' : ' (none needed, all already present).')
   );
 }
 
