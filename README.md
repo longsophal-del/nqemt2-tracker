@@ -203,25 +203,35 @@ page above is untouched, same code, same route, same look.
 
 This one is a full-year Gantt: every activity gets its own row (so bars
 never overlap), with Jan–Dec running across the top and each month split
-into week columns (W1–W4, or W1–W5 for Jan/Apr/Jul/Oct) matching the layout
-in the reference you shared. The Activities column stays pinned on the left
-while you scroll sideways through the year, and the header row stays pinned
-while you scroll down through a long activity list.
+into wider week columns matching the layout in the reference you shared —
+sized for readability rather than the cramped, compressed look of the
+first version. Each week column is a real Sunday–Saturday calendar week —
+the same week you'd see on any calendar — not an artificial even split of
+each month's day count, so an activity always lines up under the actual
+week it falls in. A week that straddles two months (e.g. its last couple
+of days spill into the next month) is grouped under whichever month holds
+most of its days, same as an ordinary month-view calendar; because of
+that, the number of week columns per month (4 or 5) now comes from the
+real calendar for that year rather than a fixed pattern, and can shift
+slightly year to year. The Activities column stays pinned on the left
+while you scroll sideways through the year, and the header row stays
+pinned while you scroll down through a long activity list.
 
 Each row shows the planned (budget) period as a colored bar (colored by
 category, same as the other charts), with a second, hatched bar underneath
 for the Actual Start/End dates whenever they're recorded and differ from the
-plan. Instead of the activity name, the bar itself is labeled with the
-total number of budget days it covers (e.g. "30 Days" — Planned Start
-through Planned End, inclusive), and the bar's left/right edges are
-positioned from the real Planned Start/End dates, so it stretches across
-every week/month it actually spans, however long the budget period is —
-hovering it still shows the full detail (activity, category, exact dates,
-status, delay) as a tooltip. Short activities (a handful of days) get a bar
-wide enough to always show their full label ("5 Days" never clips to
-"5 Da…") even though that's a bit wider than their true day-span on the
-grid; longer activities are unaffected and are still sized exactly to
-their real dates. Under the activity name in the pinned column
+plan. Instead of the activity name, the bar is labeled with the total
+number of budget days it covers (e.g. "30 Days" — Planned Start through
+Planned End, inclusive). The bar's left edge always sits exactly at the
+Planned Start date and never moves; its width is the real date span
+whenever that's already enough to hold the label. Only when the true
+duration is genuinely too narrow for "N Days" to fit does the bar's right
+edge extend a little further — just enough for the text, never across
+whole extra weeks — so a short (1–2 day) activity's bar still starts and
+reads at the correct place on the grid and the label always stays inside
+the bar rather than floating outside it. Hovering any bar still gives the
+full detail — activity, category, exact dates, status, delay — as a
+tooltip. Under the activity name in the pinned column
 you'll now also see its Budget Category (the same Category field used
 everywhere else), its Budget Start – End dates (the same Planned Start/End
 dates, formatted as a range), then its Status and an auto-computed Delay

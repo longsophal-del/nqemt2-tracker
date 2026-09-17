@@ -1288,35 +1288,44 @@
   // via horizontal scroll, and the Activities column pinned via CSS sticky
   // positioning so it stays visible while scrolling.
   // =========================================================================
-  var SCH_COL_PX = 42; // fixed px width per week column in the Gantt grid
-  // Week-per-month pattern matching the reference template: Jan/Apr/Jul/Oct
-  // get 5 week columns, every other month gets 4 (a 5-4-4 quarterly split,
-  // 4*5 + 8*4 = 52 columns for the year). This is a fixed visual template,
-  // not a real ISO calendar-week count — each month's real days are then
-  // divided as evenly as possible across its own week columns below.
-  function scheduleMonthWeekCount(m) { return (m % 3 === 1) ? 5 : 4; }
-  function scheduleWeekSegments(m, dim) {
-    var n = scheduleMonthWeekCount(m);
-    var base = Math.floor(dim / n), extra = dim % n;
-    var segs = [], day = 1;
-    for (var i = 0; i < n; i++) {
-      var len = base + (i < extra ? 1 : 0);
-      var end = day + len - 1;
-      segs.push({ weekNum: i + 1, startDay: day, endDay: end });
-      day = end + 1;
-    }
-    return segs;
+  var SCH_COL_PX = 64; // fixed px width per week column in the Gantt grid
+  // Week columns are REAL Sunday–Saturday calendar weeks (the same weeks
+  // you'd see on any calendar) — not an artificial even split of each
+  // month's day count. A week that straddles two months (e.g. the week
+  // containing both the last days of one month and the first of the next)
+  // is grouped under whichever month holds most of its days, exactly like a
+  // normal month-view calendar does, so "W3" always means the same real
+  // 7-day week regardless of which month header it happens to sit under.
+  function scheduleYearWeekEpoch(year) {
+    var jan1 = new Date(year, 0, 1);
+    return new Date(year, 0, 1 - jan1.getDay()); // the Sunday on/before Jan 1
   }
   function buildScheduleLayout(year) {
-    var monthStartCol = [], segsByMonth = [], col = 0;
-    for (var m = 1; m <= 12; m++) {
-      var dim = daysInMonth(year, m);
-      var segs = scheduleWeekSegments(m, dim);
-      monthStartCol[m] = col;
-      segsByMonth[m] = segs;
-      col += segs.length;
+    var weekEpoch = scheduleYearWeekEpoch(year);
+    var yearEnd = new Date(year, 11, 31);
+    var totalWeeks = Math.floor(diffDays(yearEnd, weekEpoch) / 7) + 1;
+
+    var monthStartCol = [], segsByMonth = [], colForWeek = {}, col = 0;
+    for (var m = 1; m <= 12; m++) { segsByMonth[m] = []; }
+
+    for (var w = 0; w < totalWeeks; w++) {
+      var wStart = new Date(weekEpoch.getFullYear(), weekEpoch.getMonth(), weekEpoch.getDate() + w * 7);
+      var bestMonth = null, bestCount = -1, counts = {};
+      for (var i = 0; i < 7; i++) {
+        var day = new Date(wStart.getFullYear(), wStart.getMonth(), wStart.getDate() + i);
+        if (day.getFullYear() !== year) continue; // outside the shown year — ignore for the majority count
+        var m2 = day.getMonth() + 1;
+        counts[m2] = (counts[m2] || 0) + 1;
+        if (counts[m2] > bestCount) { bestCount = counts[m2]; bestMonth = m2; }
+      }
+      if (bestMonth != null) segsByMonth[bestMonth].push(w); // weeks are pushed in chronological order already
     }
-    return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth };
+    for (var m3 = 1; m3 <= 12; m3++) {
+      monthStartCol[m3] = col;
+      segsByMonth[m3].forEach(function (w2, i2) { colForWeek[w2] = col + i2; });
+      col += segsByMonth[m3].length;
+    }
+    return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth, colForWeek: colForWeek, weekEpoch: weekEpoch };
   }
   // Measures how wide a Schedule Timeline bar's label needs to be so it
   // never truncates ("5 Days" must never clip to "5 Da…"). Uses a canvas to
@@ -1348,31 +1357,28 @@
     var borderBuffer = 6; // border, box-shadow, and a small safety margin
     return Math.ceil(textW + iconW + paddingW + borderBuffer);
   }
-  // Position (in px) of a given day within the full-year grid.
+  // Position (in px) of a given real date within the full-year grid.
   // endInclusive:false -> the leading edge of that day (bar start);
   // endInclusive:true  -> the trailing edge of that day (bar end, so the
-  // whole day is included in the bar's width).
-  function schedulePx(layout, month, day, endInclusive) {
-    month = Math.max(1, Math.min(12, month));
-    var segs = layout.segsByMonth[month];
-    for (var i = 0; i < segs.length; i++) {
-      var s = segs[i];
-      if (day >= s.startDay && day <= s.endDay) {
-        var offset = endInclusive ? (day - s.startDay + 1) : (day - s.startDay);
-        var frac = offset / (s.endDay - s.startDay + 1);
-        return (layout.monthStartCol[month] + i + frac) * SCH_COL_PX;
-      }
-    }
-    return (layout.monthStartCol[month] + segs.length) * SCH_COL_PX;
+  // whole day is included in the bar's width). Every real week is exactly 7
+  // days, so this is just: which week column, plus how far through that
+  // week's 7 days this date falls.
+  function schedulePx(layout, date, endInclusive) {
+    var wIdx = Math.floor(diffDays(new Date(date.getFullYear(), date.getMonth(), date.getDate()), layout.weekEpoch) / 7);
+    var col = layout.colForWeek[wIdx];
+    if (col == null) col = (wIdx < 0) ? 0 : layout.totalCols; // outside this year's grid entirely (shouldn't occur once clamped)
+    var dow = date.getDay(); // 0 (Sun) .. 6 (Sat) — position within that real week
+    var offset = endInclusive ? dow + 1 : dow;
+    return (col + offset / 7) * SCH_COL_PX;
   }
   // Clamps a date onto the displayed year's grid (for activities that start
-  // before or end after the year shown) — returns {month, day} in-range.
+  // before or end after the year shown) — returns an in-range Date.
   function scheduleClamp(date, year, which) {
-    if (!date) return which === "end" ? { month: 12, day: daysInMonth(year, 12) } : { month: 1, day: 1 };
+    if (!date) return which === "end" ? new Date(year, 11, 31) : new Date(year, 0, 1);
     var y = date.getFullYear();
-    if (y < year) return { month: 1, day: 1 };
-    if (y > year) return { month: 12, day: daysInMonth(year, 12) };
-    return { month: date.getMonth() + 1, day: date.getDate() };
+    if (y < year) return new Date(year, 0, 1);
+    if (y > year) return new Date(year, 11, 31);
+    return date;
   }
   function scheduleDocOverlapsYear(d, year) {
     var s = parseDateLocal(d.startDate), e = parseDateLocal(d.endDate) || s;
@@ -1425,11 +1431,11 @@
 
     var monthHeaderHtml = "", weekHeaderHtml = "";
     for (var m = 1; m <= 12; m++) {
-      var segs = layout.segsByMonth[m];
+      var weeks = layout.segsByMonth[m];
       var altCls = (m % 2 === 0) ? " sch-alt" : "";
-      monthHeaderHtml += '<th class="sch-month-h' + altCls + '" colspan="' + segs.length + '">' + MONTH_ABBR[m - 1] + '</th>';
-      segs.forEach(function (s) {
-        weekHeaderHtml += '<th class="sch-week-h' + altCls + '" style="width:' + SCH_COL_PX + 'px; min-width:' + SCH_COL_PX + 'px;">W' + s.weekNum + '</th>';
+      monthHeaderHtml += '<th class="sch-month-h' + altCls + '" colspan="' + weeks.length + '">' + MONTH_ABBR[m - 1] + '</th>';
+      weeks.forEach(function (w, i) {
+        weekHeaderHtml += '<th class="sch-week-h' + altCls + '" style="width:' + SCH_COL_PX + 'px; min-width:' + SCH_COL_PX + 'px;">W' + (i + 1) + '</th>';
       });
     }
     var gridWidth = layout.totalCols * SCH_COL_PX;
@@ -1439,8 +1445,8 @@
       var g = CATEGORY_GROUPS.indexOf(d.categoryGroup) >= 0 ? d.categoryGroup : "Other";
       var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate) || pStart;
       var cs = scheduleClamp(pStart, year, "start"), ce = scheduleClamp(pEnd, year, "end");
-      var left = schedulePx(layout, cs.month, cs.day, false);
-      var right = schedulePx(layout, ce.month, ce.day, true);
+      var left = schedulePx(layout, cs, false);
+      var right = schedulePx(layout, ce, true);
 
       var icon = info.code === "delayed" ? "⚠" : info.code === "rescheduled" ? "↺" :
         info.code === "completed-delayed" ? "⚑" : info.code === "completed" ? "✓" :
@@ -1452,9 +1458,16 @@
       // cut off at the edge of the visible year.
       var budgetDays = (pStart && pEnd) ? (diffDays(pEnd, pStart) + 1) : null;
       var budgetDaysLabel = budgetDays != null ? (budgetDays + (budgetDays === 1 ? " Day" : " Days")) : "—";
-      // Never let a short activity's bar be narrower than its own label —
-      // "5 Days" must always render in full, never clip to "5 Da…".
-      var width = Math.max(right - left, schBarMinWidth(budgetDaysLabel, !!icon));
+      // The bar's LEFT edge always sits exactly at the Planned Start date —
+      // that never moves. Its width is the real date span whenever that's
+      // already enough to hold the label; only when the true duration is too
+      // narrow to fit "N Days" does the right edge extend slightly further,
+      // just enough for the text (never across whole extra weeks) — so a
+      // short activity's bar still starts and reads at the correct place on
+      // the grid, it's simply not clipped to unreadable width.
+      var trueWidth = right - left;
+      var minTextWidth = schBarMinWidth(budgetDaysLabel, !!icon);
+      var width = Math.max(trueWidth, minTextWidth);
       var tip = escapeHtml(d.activity) +
         "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
         "\nCategory: " + escapeHtml(d.category || "—") +
@@ -1472,8 +1485,8 @@
       if (aStart || aEnd) {
         var as = aStart || aEnd, ae = aEnd || aStart;
         var acs = scheduleClamp(as, year, "start"), ace = scheduleClamp(ae, year, "end");
-        var aLeft = schedulePx(layout, acs.month, acs.day, false);
-        var aRight = schedulePx(layout, ace.month, ace.day, true);
+        var aLeft = schedulePx(layout, acs, false);
+        var aRight = schedulePx(layout, ace, true);
         var aWidth = Math.max(aRight - aLeft, 6);
         actualBar = '<div class="sch-bar-actual code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
           'style="left:' + aLeft.toFixed(1) + 'px; width:' + aWidth.toFixed(1) + 'px; background-color:' + cssVar("--tl-actual") + ';" title="' + tip + '"></div>';
