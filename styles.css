@@ -202,6 +202,50 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .ds-card.ds-delayed .ds-n{color:var(--st-delayed);}
 .ds-card.ds-other .ds-n{color:var(--cat-other);}
 
+/* ==========================================================================
+   Schedule Timeline (Gantt) — separate page from Calendar/Timeline above.
+   A sticky-first-column, sticky-header table: .sch-outer scrolls both
+   axes, the Activities cell stays pinned via position:sticky (left), and
+   the two header rows stay pinned via position:sticky (top). One row per
+   activity — bars are absolutely positioned inside a single wide td that
+   spans the whole year, so day-level positioning isn't constrained by
+   individual table-cell boundaries.
+   ========================================================================== */
+.sch-filters{margin-bottom:10px;}
+.sch-outer{overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px;}
+.sch-table{border-collapse:separate; border-spacing:0; width:max-content;}
+.sch-table th{font-size:11px; font-weight:600; color:var(--muted); background:var(--paper); padding:6px 4px; text-align:center; border-bottom:1px solid var(--line); border-left:1px solid var(--line); white-space:nowrap;}
+.sch-corner{position:sticky; left:0; top:0; z-index:6; background:var(--surface); text-align:left; padding:8px 12px; min-width:220px; max-width:260px; border-left:none;}
+.sch-month-h{position:sticky; top:0; z-index:3; font-size:12px;}
+.sch-week-h{position:sticky; top:27px; z-index:3;}
+.sch-month-h.sch-alt, .sch-week-h.sch-alt{background:var(--paper-alt, var(--paper));}
+.sch-activity-cell{position:sticky; left:0; z-index:2; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top;}
+.sch-name{font-weight:500; font-size:12.5px; margin-bottom:4px; white-space:normal; word-break:break-word;}
+.sch-chips{display:flex; flex-wrap:wrap; gap:5px; align-items:center;}
+.sch-bar-cell{position:relative; padding:0; border-bottom:1px solid var(--line); height:46px;}
+.sch-bar-track{position:relative; height:100%; background-image:repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent 100%);}
+.sch-bar{
+  position:absolute; top:6px; height:16px; border-radius:5px; cursor:pointer;
+  opacity:.92; display:flex; align-items:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+  font-size:10px; color:#fff; padding:0 6px; font-weight:500; gap:3px;
+  box-shadow:0 1px 2px rgba(0,0,0,.15); transition:transform .1s, opacity .1s;
+  border:1px solid var(--paper); border-bottom:3px solid transparent;
+}
+.sch-bar:hover, .sch-bar:focus-visible{opacity:1; transform:scaleY(1.1); z-index:2;}
+.sch-bar.code-delayed{border-bottom-color:var(--st-delayed);}
+.sch-bar.code-completed-delayed{border-bottom-color:var(--st-progress);}
+.sch-bar.code-rescheduled{border-bottom-color:var(--cat-other); border-bottom-style:dashed;}
+.sch-bar.code-completed{border-bottom-color:var(--st-completed);}
+.sch-bar.code-cancelled{opacity:.45; text-decoration:line-through;}
+.sch-bar-actual{
+  position:absolute; top:26px; height:10px; border-radius:4px; cursor:pointer;
+  opacity:.8; box-shadow:0 1px 2px rgba(0,0,0,.15);
+  background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.4) 0 3px, transparent 3px 7px);
+  border:1px solid var(--paper);
+}
+.sch-bar-actual.code-rescheduled{outline:1px dashed var(--st-delayed); outline-offset:-1px;}
+.sch-bar-actual:hover, .sch-bar-actual:focus-visible{opacity:1; z-index:2;}
+
 .filters{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
 .filters input[type=search]{
   border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:var(--paper); color:var(--ink);

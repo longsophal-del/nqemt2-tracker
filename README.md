@@ -49,6 +49,18 @@ empty — the site creates rows here itself the first time you add a
 category. If you skip this tab, the Category page still opens but shows
 "0 categories" until you add it.
 
+### 1c. Fill the Categories tab from your existing activities (optional but recommended)
+
+Right after `setupSheet` creates the Categories tab, it's empty — the
+Category page will correctly show "0 categories" until it has rows; that's
+expected, not a bug. To populate it with the category names you're already
+using across your 128 activities (instead of typing them in one by one),
+run **seedCategoriesFromActivities** from the same function dropdown, right
+after running `setupSheet`. It scans every activity's category, works out
+its most common color group, and adds one row per unique category name. It
+skips any name already in the tab, so it's safe to re-run later after
+adding new activities with new category names.
+
 ### 2. Deploy the Apps Script backend (~3 minutes)
 
 1. Open the Sheet (link above) → **Extensions → Apps Script**.
@@ -87,8 +99,9 @@ the change automatically once committed.
 ### Sidebar navigation
 
 A left sidebar (collapses to a hamburger menu on phones/narrow screens) with
-six sections: **Dashboard**, **Activities**, **Calendar / Timeline**, **Add
-Activity**, **Reports** (Phase 2 placeholder), **Settings**.
+**Dashboard**, **Calendar / Timeline**, **Schedule Timeline** (new — a
+separate full-year Gantt view, see below), **Activities**, **Add Activity**,
+**Category**, **Reports** (Phase 2 placeholder), and **Settings**.
 
 ### Dashboard
 
@@ -171,6 +184,29 @@ every time the timeline renders — there's nothing to configure per activity,
 and nothing in the Sheet changes. On narrow screens the timeline scrolls
 horizontally rather than squeezing bars unreadably thin.
 
+### Schedule Timeline (new — separate page)
+
+A new **"Schedule Timeline"** item in the sidebar, right under Calendar /
+Timeline. It's a completely separate page — the existing Calendar / Timeline
+page above is untouched, same code, same route, same look.
+
+This one is a full-year Gantt: every activity gets its own row (so bars
+never overlap), with Jan–Dec running across the top and each month split
+into week columns (W1–W4, or W1–W5 for Jan/Apr/Jul/Oct) matching the layout
+in the reference you shared. The Activities column stays pinned on the left
+while you scroll sideways through the year, and the header row stays pinned
+while you scroll down through a long activity list.
+
+Each row shows the planned period as a colored bar (colored by category,
+same as the other charts), with a second, hatched bar underneath for the
+Actual Start/End dates whenever they're recorded and differ from the plan.
+Under the activity name you'll see its Status and an auto-computed Delay
+chip (On Time / Delayed +Nd / Completed / Rescheduled / Cancelled, same
+delay engine as everywhere else in the app). Filters at the top narrow it
+down by Year (which year's Jan–Dec grid to show), Month, Category,
+Responsible Person, and Status. Clicking any bar opens that activity's full
+detail popup (the same one as the Activities page's "View" button).
+
 ### Settings
 
 Light / dark / system theme toggle (remembered per browser), a link to open
@@ -195,9 +231,9 @@ activity count.
 
 | File | Purpose |
 |---|---|
-| `index.html` | The page itself (sidebar, all seven sections) |
+| `index.html` | The page itself (sidebar, all sections) |
 | `styles.css` | All styling |
-| `app.js` | Routing, dashboard, activities, categories, timeline, form, and save-to-Sheet logic |
+| `app.js` | Routing, dashboard, activities, categories, timeline, Schedule Timeline (Gantt), form, and save-to-Sheet logic |
 | `data.js` | Bundled sample snapshot (used only until `config.js` is set — lets the page work immediately after upload, before you deploy the script) |
 | `config.js` | **Edit this** — your Apps Script URL, and optionally your Sheet's URL |
 | `apps-script/Code.gs` | Paste into the Sheet's Apps Script editor |

@@ -33,6 +33,7 @@
     activities: "Activities",
     categories: "Category",
     timeline: "Calendar / Timeline",
+    schedule: "Schedule Timeline",
     add: "Add activity",
     reports: "Reports",
     settings: "Settings"
@@ -321,6 +322,7 @@
     route: "dashboard",
     timelineYear: 2026,
     dash: { year: "", month: "", category: "", responsible: "", status: "" },
+    sch: { year: null, month: "", category: "", responsible: "", status: "" },
     act: { search: "", year: "", category: "", responsible: "", status: "", sortKey: "start", sortDir: "asc", page: 1, pageSize: 25 },
     editingId: null,
     duplicating: false
@@ -336,6 +338,8 @@
       "searchInput", "filterYear", "filterCategory", "filterResponsible", "filterStatus", "rowCount", "tableBody", "pagination",
       "categoriesTableBody", "categoryCount", "addCategoryBtn",
       "yearToggle", "timelineHint", "timelineBody", "timelineLegend", "delaySummary",
+      "schYear", "schMonth", "schCategory", "schResponsible", "schStatus", "schReset",
+      "scheduleHint", "scheduleOuter", "scheduleLegend", "scheduleDelaySummary",
       "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory", "categoryList",
       "fResponsible", "responsibleList", "fSupporting", "supportingList", "fPriority", "fStatus",
       "fPlannedStart", "fPlannedEnd", "fActualStart", "fActualEnd", "fDelayOverride", "fRemarks",
@@ -360,6 +364,7 @@
     else if (route === "activities") renderActivitiesTable();
     else if (route === "categories") renderCategoriesTable();
     else if (route === "timeline") { renderYearToggleTimeline(); renderTimeline(); }
+    else if (route === "schedule") { populateScheduleFilterOptions(); renderScheduleTimeline(); }
     else if (route === "add") { if (!state.editingId && !state.duplicating) resetForm(); populateFormDatalists(); }
     else if (route === "settings") renderSettings();
   }
@@ -1261,6 +1266,226 @@
   }
 
   // =========================================================================
+  // Schedule Timeline — a separate, full-year Gantt view (its own nav item
+  // and #view-schedule section). This is intentionally independent of the
+  // Calendar/Timeline page above: it doesn't call, share render state with,
+  // or modify anything in that section. One row per activity (no lane
+  // packing needed), Jan–Dec across the top with the whole year on screen
+  // via horizontal scroll, and the Activities column pinned via CSS sticky
+  // positioning so it stays visible while scrolling.
+  // =========================================================================
+  var SCH_COL_PX = 42; // fixed px width per week column in the Gantt grid
+  // Week-per-month pattern matching the reference template: Jan/Apr/Jul/Oct
+  // get 5 week columns, every other month gets 4 (a 5-4-4 quarterly split,
+  // 4*5 + 8*4 = 52 columns for the year). This is a fixed visual template,
+  // not a real ISO calendar-week count — each month's real days are then
+  // divided as evenly as possible across its own week columns below.
+  function scheduleMonthWeekCount(m) { return (m % 3 === 1) ? 5 : 4; }
+  function scheduleWeekSegments(m, dim) {
+    var n = scheduleMonthWeekCount(m);
+    var base = Math.floor(dim / n), extra = dim % n;
+    var segs = [], day = 1;
+    for (var i = 0; i < n; i++) {
+      var len = base + (i < extra ? 1 : 0);
+      var end = day + len - 1;
+      segs.push({ weekNum: i + 1, startDay: day, endDay: end });
+      day = end + 1;
+    }
+    return segs;
+  }
+  function buildScheduleLayout(year) {
+    var monthStartCol = [], segsByMonth = [], col = 0;
+    for (var m = 1; m <= 12; m++) {
+      var dim = daysInMonth(year, m);
+      var segs = scheduleWeekSegments(m, dim);
+      monthStartCol[m] = col;
+      segsByMonth[m] = segs;
+      col += segs.length;
+    }
+    return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth };
+  }
+  // Position (in px) of a given day within the full-year grid.
+  // endInclusive:false -> the leading edge of that day (bar start);
+  // endInclusive:true  -> the trailing edge of that day (bar end, so the
+  // whole day is included in the bar's width).
+  function schedulePx(layout, month, day, endInclusive) {
+    month = Math.max(1, Math.min(12, month));
+    var segs = layout.segsByMonth[month];
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (day >= s.startDay && day <= s.endDay) {
+        var offset = endInclusive ? (day - s.startDay + 1) : (day - s.startDay);
+        var frac = offset / (s.endDay - s.startDay + 1);
+        return (layout.monthStartCol[month] + i + frac) * SCH_COL_PX;
+      }
+    }
+    return (layout.monthStartCol[month] + segs.length) * SCH_COL_PX;
+  }
+  // Clamps a date onto the displayed year's grid (for activities that start
+  // before or end after the year shown) — returns {month, day} in-range.
+  function scheduleClamp(date, year, which) {
+    if (!date) return which === "end" ? { month: 12, day: daysInMonth(year, 12) } : { month: 1, day: 1 };
+    var y = date.getFullYear();
+    if (y < year) return { month: 1, day: 1 };
+    if (y > year) return { month: 12, day: daysInMonth(year, 12) };
+    return { month: date.getMonth() + 1, day: date.getDate() };
+  }
+  function scheduleDocOverlapsYear(d, year) {
+    var s = parseDateLocal(d.startDate), e = parseDateLocal(d.endDate) || s;
+    if (!s) return d.year === year;
+    var endY = e ? e.getFullYear() : s.getFullYear();
+    return s.getFullYear() <= year && endY >= year;
+  }
+
+  function populateScheduleFilterOptions() {
+    var years = uniqueSorted(state.docs, function (d) { return d.year; });
+    if (!state.sch.year || years.indexOf(state.sch.year) === -1) {
+      state.sch.year = years.length ? years[years.length - 1] : new Date().getFullYear();
+    }
+    var cats = uniqueSorted(state.docs, function (d) { return d.category; });
+    var people = uniqueSorted(state.docs, function (d) { return d.responsiblePerson; });
+    els.schYear.innerHTML = years.map(function (y) { return '<option value="' + y + '">' + y + '</option>'; }).join("");
+    els.schYear.value = state.sch.year;
+    els.schCategory.innerHTML = '<option value="">All categories</option>' + cats.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join("");
+    els.schResponsible.innerHTML = '<option value="">All responsible people</option>' + people.map(function (p) { return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>'; }).join("");
+    els.schStatus.innerHTML = '<option value="">All statuses</option>' + STATUS_LIST.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
+    els.schCategory.value = state.sch.category || "";
+    els.schResponsible.value = state.sch.responsible || "";
+    els.schStatus.value = state.sch.status || "";
+    els.schMonth.value = state.sch.month || "";
+  }
+
+  function getScheduleDocs() {
+    var f = state.sch, year = state.sch.year;
+    return state.docs.filter(function (d) {
+      if (!scheduleDocOverlapsYear(d, year)) return false;
+      if (f.month && String(d.month) !== String(f.month)) return false;
+      if (f.category && d.category !== f.category) return false;
+      if (f.responsible && d.responsiblePerson !== f.responsible) return false;
+      if (f.status && d.status !== f.status) return false;
+      return true;
+    }).sort(function (a, b) {
+      var sa = parseDateLocal(a.startDate), sb = parseDateLocal(b.startDate);
+      if (sa && sb) return sa.getTime() - sb.getTime();
+      return 0;
+    });
+  }
+
+  function renderScheduleTimeline() {
+    var year = state.sch.year;
+    var list = getScheduleDocs();
+    els.scheduleHint.textContent = "Full-year Gantt for " + year + " — " + list.length + " of " + state.docs.length +
+      " activities shown. Scroll sideways to see the whole year; the Activities column stays put. Click a bar for details.";
+    var layout = buildScheduleLayout(year);
+    var today = todayLocal();
+
+    var monthHeaderHtml = "", weekHeaderHtml = "";
+    for (var m = 1; m <= 12; m++) {
+      var segs = layout.segsByMonth[m];
+      var altCls = (m % 2 === 0) ? " sch-alt" : "";
+      monthHeaderHtml += '<th class="sch-month-h' + altCls + '" colspan="' + segs.length + '">' + MONTH_ABBR[m - 1] + '</th>';
+      segs.forEach(function (s) {
+        weekHeaderHtml += '<th class="sch-week-h' + altCls + '" style="width:' + SCH_COL_PX + 'px; min-width:' + SCH_COL_PX + 'px;">W' + s.weekNum + '</th>';
+      });
+    }
+    var gridWidth = layout.totalCols * SCH_COL_PX;
+
+    var rowsHtml = list.map(function (d) {
+      var info = computeDelayInfo(d, today);
+      var g = CATEGORY_GROUPS.indexOf(d.categoryGroup) >= 0 ? d.categoryGroup : "Other";
+      var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate) || pStart;
+      var cs = scheduleClamp(pStart, year, "start"), ce = scheduleClamp(pEnd, year, "end");
+      var left = schedulePx(layout, cs.month, cs.day, false);
+      var right = schedulePx(layout, ce.month, ce.day, true);
+      var width = Math.max(right - left, 6);
+
+      var icon = info.code === "delayed" ? "⚠" : info.code === "rescheduled" ? "↺" :
+        info.code === "completed-delayed" ? "⚑" : info.code === "completed" ? "✓" :
+        info.code === "cancelled" ? "🚫" : "";
+      var delayText = info.label + (info.delayDays > 0 ? " (" + info.delayDays + "d)" : (info.delayDays < 0 ? " (" + Math.abs(info.delayDays) + "d early)" : ""));
+      var tip = escapeHtml(d.activity) +
+        "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
+        "\nCategory: " + escapeHtml(d.category || "—") +
+        "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) +
+        "\nActual: " + (d.actualStart || d.actualEnd ? (prettyDate(d.actualStart) + " – " + prettyDate(d.actualEnd)) : "—") +
+        "\nStatus: " + escapeHtml(d.status) +
+        "\nDelay Days: " + (info.delayDays > 0 ? info.delayDays : 0);
+
+      var plannedBar = '<div class="sch-bar code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
+        'style="left:' + left.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '">' +
+        (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(d.activity) + '</div>';
+
+      var actualBar = "";
+      var aStart = parseDateLocal(d.actualStart), aEnd = parseDateLocal(d.actualEnd);
+      if (aStart || aEnd) {
+        var as = aStart || aEnd, ae = aEnd || aStart;
+        var acs = scheduleClamp(as, year, "start"), ace = scheduleClamp(ae, year, "end");
+        var aLeft = schedulePx(layout, acs.month, acs.day, false);
+        var aRight = schedulePx(layout, ace.month, ace.day, true);
+        var aWidth = Math.max(aRight - aLeft, 6);
+        actualBar = '<div class="sch-bar-actual code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
+          'style="left:' + aLeft.toFixed(1) + 'px; width:' + aWidth.toFixed(1) + 'px; background-color:' + cssVar("--tl-actual") + ';" title="' + tip + '"></div>';
+      }
+
+      return '<tr>' +
+        '<td class="sch-activity-cell">' +
+          '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + escapeHtml(d.activity) + '</div>' +
+          '<div class="sch-chips">' +
+            '<span class="cat-chip">' + escapeHtml(d.status) + '</span>' +
+            '<span class="delay-chip dc-' + info.code + '">' + escapeHtml(delayText) + '</span>' +
+          '</div>' +
+        '</td>' +
+        '<td class="sch-bar-cell" colspan="' + layout.totalCols + '">' +
+          '<div class="sch-bar-track" style="width:' + gridWidth + 'px; background-size:' + SCH_COL_PX + 'px 100%;">' + plannedBar + actualBar + '</div>' +
+        '</td>' +
+        '</tr>';
+    }).join("");
+
+    if (!list.length) {
+      rowsHtml = '<tr><td class="sch-activity-cell" colspan="' + (layout.totalCols + 1) + '" style="text-align:center; color:var(--muted); padding:20px;">No activities match the current filters for ' + year + '.</td></tr>';
+    }
+
+    els.scheduleOuter.innerHTML =
+      '<table class="sch-table">' +
+        '<thead>' +
+          '<tr><th class="sch-corner" rowspan="2">Activities</th>' + monthHeaderHtml + '</tr>' +
+          '<tr>' + weekHeaderHtml + '</tr>' +
+        '</thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>';
+
+    els.scheduleOuter.querySelectorAll(".sch-bar, .sch-bar-actual").forEach(function (b) {
+      b.addEventListener("click", function () { viewActivityRow(b.getAttribute("data-id")); });
+      b.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); viewActivityRow(b.getAttribute("data-id")); } });
+    });
+
+    renderTimelineLegend(els.scheduleLegend);
+    renderDelaySummary(list, els.scheduleDelaySummary, String(year));
+  }
+
+  function wireScheduleFilters() {
+    for (var mm = 1; mm <= 12; mm++) {
+      var o = document.createElement("option"); o.value = mm; o.textContent = MONTH_ABBR[mm - 1];
+      els.schMonth.appendChild(o);
+    }
+    ["schYear", "schMonth", "schCategory", "schResponsible", "schStatus"].forEach(function (id) {
+      els[id].addEventListener("change", function () {
+        state.sch.year = parseInt(els.schYear.value, 10) || state.sch.year;
+        state.sch.month = els.schMonth.value;
+        state.sch.category = els.schCategory.value;
+        state.sch.responsible = els.schResponsible.value;
+        state.sch.status = els.schStatus.value;
+        renderScheduleTimeline();
+      });
+    });
+    els.schReset.addEventListener("click", function () {
+      state.sch.month = ""; state.sch.category = ""; state.sch.responsible = ""; state.sch.status = "";
+      populateScheduleFilterOptions();
+      renderScheduleTimeline();
+    });
+  }
+
+  // =========================================================================
   // Add / Edit / Duplicate form
   // =========================================================================
   function populateFormStaticOptions() {
@@ -1476,6 +1701,8 @@
     renderCategoriesTable();
     renderYearToggleTimeline();
     renderTimeline();
+    populateScheduleFilterOptions();
+    renderScheduleTimeline();
     populateFormDatalists();
     renderSettings();
     els.sidebarSync.textContent = usingLiveApi ? "🟢 Live (Google Sheet)" : "🟡 Demo mode";
@@ -1496,6 +1723,7 @@
     wireChartActions();
     wireActivitiesControls();
     wireCategoriesControls();
+    wireScheduleFilters();
     wireModal();
     wireSettings();
     populateFormStaticOptions();
@@ -1506,7 +1734,7 @@
       state.docs = docs.map(normalizeDoc);
       state.categories = (cats || []).map(normalizeCategory);
       var years = uniqueSorted(state.docs, function (d) { return d.year; });
-      if (years.length) { state.timelineYear = years[years.length - 1]; state.dash.year = String(state.timelineYear); }
+      if (years.length) { state.timelineYear = years[years.length - 1]; state.dash.year = String(state.timelineYear); state.sch.year = state.timelineYear; }
       renderAll();
       setRoute("dashboard");
     }

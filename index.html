@@ -23,6 +23,7 @@
     <nav class="nav" id="mainNav">
       <button class="nav-item" data-route="dashboard">📊 <span>Dashboard</span></button>
       <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button>
+      <button class="nav-item" data-route="schedule">📅 <span>Schedule Timeline</span></button>
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
       <button class="nav-item" data-route="categories">🏷️ <span>Category</span></button>
@@ -185,6 +186,27 @@
           <div id="timelineBody"></div>
           <div class="tl-legend legend" id="timelineLegend"></div>
           <div class="delay-summary" id="delaySummary"></div>
+        </section>
+      </section>
+
+      <!-- ============ SCHEDULE TIMELINE (Gantt) ============ -->
+      <!-- A separate page from Calendar / Timeline above — its own route,
+           its own render functions in app.js, nothing shared or modified. -->
+      <section id="view-schedule" class="view" hidden>
+        <section>
+          <h2>Schedule Timeline</h2>
+          <div class="hint" id="scheduleHint">Full-year Gantt view — click a bar for activity details.</div>
+          <div class="filters sch-filters">
+            <select id="schYear"></select>
+            <select id="schMonth"><option value="">All months</option></select>
+            <select id="schCategory"><option value="">All categories</option></select>
+            <select id="schResponsible"><option value="">All responsible people</option></select>
+            <select id="schStatus"><option value="">All statuses</option></select>
+            <button class="btn" id="schReset" title="Clear category/responsible/status/month filters">✕ Reset filters</button>
+          </div>
+          <div class="sch-outer" id="scheduleOuter"></div>
+          <div class="tl-legend legend" id="scheduleLegend"></div>
+          <div class="delay-summary" id="scheduleDelaySummary"></div>
         </section>
       </section>
 
