@@ -208,12 +208,18 @@ sized for readability rather than the cramped, compressed look of the
 first version. Each week column is a real Sunday–Saturday calendar week —
 the same week you'd see on any calendar — not an artificial even split of
 each month's day count, so an activity always lines up under the actual
-week it falls in. A week that straddles two months (e.g. its last couple
-of days spill into the next month) is grouped under whichever month holds
-most of its days, same as an ordinary month-view calendar; because of
-that, the number of week columns per month (4 or 5) now comes from the
-real calendar for that year rather than a fixed pattern, and can shift
-slightly year to year. The Activities column stays pinned on the left
+week it falls in. Each month's week columns are built independently and
+clipped to that month's own days: if the month doesn't start on a Sunday
+or end on a Saturday, its first and/or last column is a partial week
+(fewer than 7 days) rather than borrowing days from the neighboring
+month. That guarantees a date always renders under its own real month's
+header — a date on Sep 30 always sits under "Sep", never "Oct" — while
+weeks fully inside a month (e.g. the week of Jan 11–17) still show as one
+normal, full 7-day column exactly like a wall calendar. Because of that,
+the number of week columns per month (4 or 5, with partial edge columns
+where a month doesn't start/end on the week boundary) comes from the real
+calendar for that year rather than a fixed pattern, and can shift slightly
+year to year. The Activities column stays pinned on the left
 while you scroll sideways through the year, and the header row stays
 pinned while you scroll down through a long activity list.
 
@@ -222,14 +228,16 @@ category, same as the other charts), with a second, hatched bar underneath
 for the Actual Start/End dates whenever they're recorded and differ from the
 plan. Instead of the activity name, the bar is labeled with the total
 number of budget days it covers (e.g. "30 Days" — Planned Start through
-Planned End, inclusive). The bar's left edge always sits exactly at the
-Planned Start date and never moves; its width is the real date span
-whenever that's already enough to hold the label. Only when the true
-duration is genuinely too narrow for "N Days" to fit does the bar's right
-edge extend a little further — just enough for the text, never across
-whole extra weeks — so a short (1–2 day) activity's bar still starts and
-reads at the correct place on the grid and the label always stays inside
-the bar rather than floating outside it. Hovering any bar still gives the
+Planned End, inclusive). The bar's position and width are the real date
+span whenever that's already enough to hold the label. Only when the true
+duration is genuinely too narrow for "N Days" to fit does the bar grow a
+little further, just enough for the text — and it grows into whichever
+side (left or right) has more free space left within that same real
+week's column, so a short (1–2 day) activity's bar never spills into a
+week it doesn't actually occupy. Every bar that already fits its label is
+completely unaffected by this and keeps its left edge exactly at the
+Planned Start date; the label always stays inside the bar rather than
+floating outside it. Hovering any bar still gives the
 full detail — activity, category, exact dates, status, delay — as a
 tooltip. Under the activity name in the pinned column
 you'll now also see its Budget Category (the same Category field used

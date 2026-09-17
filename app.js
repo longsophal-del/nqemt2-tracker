@@ -1379,6 +1379,18 @@
     // the end of that month's columns.
     return (layout.monthStartCol[month] + segs.length) * SCH_COL_PX;
   }
+  // Which week-column index (0-based, across the whole grid) a given real
+  // date's calendar day falls in — used to find that column's left/right
+  // pixel boundaries, so a bar's label-driven width extension can be kept
+  // from crossing into a week the activity doesn't actually occupy.
+  function scheduleColIndex(layout, date) {
+    var month = date.getMonth() + 1, day = date.getDate();
+    var segs = layout.segsByMonth[month];
+    for (var i = 0; i < segs.length; i++) {
+      if (day >= segs[i].startDay && day <= segs[i].endDay) return layout.monthStartCol[month] + i;
+    }
+    return layout.monthStartCol[month] + segs.length; // fallback, shouldn't occur once clamped
+  }
   // Clamps a date onto the displayed year's grid (for activities that start
   // before or end after the year shown) — returns an in-range Date.
   function scheduleClamp(date, year, which) {
@@ -1466,16 +1478,37 @@
       // cut off at the edge of the visible year.
       var budgetDays = (pStart && pEnd) ? (diffDays(pEnd, pStart) + 1) : null;
       var budgetDaysLabel = budgetDays != null ? (budgetDays + (budgetDays === 1 ? " Day" : " Days")) : "—";
-      // The bar's LEFT edge always sits exactly at the Planned Start date —
-      // that never moves. Its width is the real date span whenever that's
-      // already enough to hold the label; only when the true duration is too
-      // narrow to fit "N Days" does the right edge extend slightly further,
-      // just enough for the text (never across whole extra weeks) — so a
-      // short activity's bar still starts and reads at the correct place on
-      // the grid, it's simply not clipped to unreadable width.
+      // The bar's position/width is the real date span whenever that's
+      // already enough to hold the label. Only when the true duration is
+      // too narrow to fit "N Days" does the bar grow beyond its true width —
+      // and it grows into whichever side (left or right) has more free
+      // space left within that SAME week's column, so the extension never
+      // crosses into a week the activity doesn't actually occupy (crossing
+      // would visually misrepresent which week it falls in). Most bars
+      // (anything that already fits) are completely unaffected: their left
+      // edge still sits exactly at the Planned Start date.
       var trueWidth = right - left;
       var minTextWidth = schBarMinWidth(budgetDaysLabel, !!icon);
-      var width = Math.max(trueWidth, minTextWidth);
+      var width = trueWidth, barLeft = left;
+      if (minTextWidth > trueWidth) {
+        var extra = minTextWidth - trueWidth;
+        var leftColBound = scheduleColIndex(layout, cs) * SCH_COL_PX;
+        var rightColBound = (scheduleColIndex(layout, ce) + 1) * SCH_COL_PX;
+        var roomLeft = Math.max(0, left - leftColBound);
+        var roomRight = Math.max(0, rightColBound - right);
+        var growLeft, growRight;
+        if (roomLeft >= roomRight) {
+          growLeft = Math.min(extra, roomLeft);
+          growRight = Math.min(extra - growLeft, roomRight);
+        } else {
+          growRight = Math.min(extra, roomRight);
+          growLeft = Math.min(extra - growRight, roomLeft);
+        }
+        var leftover = extra - growLeft - growRight;
+        if (leftover > 0) growRight += leftover; // extremely narrow column fallback: never truncate the label
+        barLeft = left - growLeft;
+        width = trueWidth + growLeft + growRight;
+      }
       var tip = escapeHtml(d.activity) +
         "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
         "\nCategory: " + escapeHtml(d.category || "—") +
@@ -1485,7 +1518,7 @@
         "\nDelay Days: " + (info.delayDays > 0 ? info.delayDays : 0);
 
       var plannedBar = '<div class="sch-bar code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
-        'style="left:' + left.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '">' +
+        'style="left:' + barLeft.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '">' +
         (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(budgetDaysLabel) + '</div>';
 
       var actualBar = "";
