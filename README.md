@@ -22,22 +22,32 @@ Timeline nav item carries today's Schedule Timeline.
 
 ## What you need to do (needs your own Google + GitHub logins, so I can't do these for you)
 
-### 1. Add the new columns to the Google Sheet
+### 1. Add the new columns to the Google Sheet, and the "Categories" tab
 
-Open the Sheet and add these header names in the next empty cells of row 1,
-spelled **exactly** like this (case-sensitive — the script reads the header
-row to build the JSON, so header text becomes the field name):
+**Easiest way — let the script do it (recommended):** once you've pasted
+`apps-script/Code.gs` into the Apps Script editor (step 2 below), pick
+**setupSheet** from the function dropdown at the top of the editor (next to
+the "Debug" button) and click **Run**. The first time, it'll ask you to
+authorize the script — same as deploying. It adds every missing header to
+row 1 and creates the **Categories** tab (with its own headers) for you.
+It never touches or removes anything already in the sheet, and it's safe to
+run more than once if you're not sure whether it already ran.
 
-- `description`
-- `responsiblePerson`
-- `supportingTeam`
-- `priority`
-- `delayOverrideDays`
+**Or by hand, if you'd rather:** open the Sheet and add these header names
+in the next empty cells of row 1, spelled **exactly** like this
+(case-sensitive — the script reads the header row to build the JSON, so
+header text becomes the field name): `description`, `responsiblePerson`,
+`supportingTeam`, `priority`, `delayOverrideDays` (and `actualStart` /
+`actualEnd` too, if the earlier Timeline update didn't already add them).
+Any of these you skip just won't be saved when you add/edit an activity
+from the site — the rest still works.
 
-(If you did the earlier Timeline update, `actualStart` and `actualEnd`
-should already be there too — if not, add those as well.) Any of these you
-skip just won't be saved when you add/edit an activity from the site — the
-rest still works.
+Then, for the Category page: click **+** at the bottom of the spreadsheet
+to add a new tab, name it exactly **Categories**, and add these three
+headers in its row 1: `id`, `name`, `group`. Leave the rest of the tab
+empty — the site creates rows here itself the first time you add a
+category. If you skip this tab, the Category page still opens but shows
+"0 categories" until you add it.
 
 ### 2. Deploy the Apps Script backend (~3 minutes)
 
@@ -103,6 +113,19 @@ pre-filled as a new copy, status reset to Planned, nothing saved until you
 submit), and **Delete** (asks for confirmation first). Export CSV now
 includes every new field.
 
+### Category page (new)
+
+A dedicated "Category" page in the sidebar for managing the category list
+activities are tagged with — a table of every category with its chart-color
+group and how many activities currently use it, plus **Add**, **Edit**, and
+**Delete**. Renaming a category updates every activity already using the old
+name automatically, so nothing is left showing a stale category. Deleting is
+blocked (with a message telling you how many activities are affected) while
+any activity still uses that category — reassign those activities on the
+Activities page first, then delete. This list is stored in the new
+**Categories** tab (step 1b above); the Add/Edit Activity form's category
+field still accepts free text too, for one-off or legacy values.
+
 ### Add / Edit Activity form
 
 All the fields from your spec: Activity Name, Description, Category,
@@ -133,11 +156,20 @@ force a specific delay figure.
   all.
 - **Cancelled** — driven by the Status field, same as before.
 
-### Timeline (unchanged from the last update)
+### Timeline
 
 Delay/status badges on each bar, a weekly period scale under each month,
 planned-vs-actual bars when they differ, a Delay Summary, and a legend.
 Clicking a bar jumps to that activity in the Activities table.
+
+Activities that overlap in date range are now automatically placed on
+separate horizontal lanes within their month, so bars never cover each
+other — a month with several overlapping activities simply grows taller.
+Non-overlapping activities still share a lane. This is calculated
+automatically from each activity's planned dates (sorted by start, then end)
+every time the timeline renders — there's nothing to configure per activity,
+and nothing in the Sheet changes. On narrow screens the timeline scrolls
+horizontally rather than squeezing bars unreadably thin.
 
 ### Settings
 
@@ -163,9 +195,9 @@ activity count.
 
 | File | Purpose |
 |---|---|
-| `index.html` | The page itself (sidebar, all six sections) |
+| `index.html` | The page itself (sidebar, all seven sections) |
 | `styles.css` | All styling |
-| `app.js` | Routing, dashboard, activities, timeline, form, and save-to-Sheet logic |
+| `app.js` | Routing, dashboard, activities, categories, timeline, form, and save-to-Sheet logic |
 | `data.js` | Bundled sample snapshot (used only until `config.js` is set — lets the page work immediately after upload, before you deploy the script) |
 | `config.js` | **Edit this** — your Apps Script URL, and optionally your Sheet's URL |
 | `apps-script/Code.gs` | Paste into the Sheet's Apps Script editor |

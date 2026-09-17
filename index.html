@@ -7,6 +7,7 @@
 <meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): dashboard, activities, timeline, and reports, backed by Google Sheets.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -24,6 +25,7 @@
       <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button>
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
+      <button class="nav-item" data-route="categories">🏷️ <span>Category</span></button>
       <button class="nav-item" data-route="reports">📈 <span>Reports</span></button>
       <button class="nav-item" data-route="settings">⚙️ <span>Settings</span></button>
     </nav>
@@ -52,31 +54,56 @@
           <select id="dfResponsible"><option value="">All responsible people</option></select>
           <select id="dfStatus"><option value="">All statuses</option></select>
           <button class="btn" id="dfReset" title="Clear all dashboard filters">✕ Reset filters</button>
+          <button class="btn btn-primary" id="exportAllChartsBtn" title="Download all four charts as one PDF">📄 All charts as PDF</button>
         </div>
 
         <div class="kpi-grid" id="kpiGrid"></div>
 
         <div class="chart-grid">
           <section class="chart-card">
-            <h2>Activities by month</h2>
+            <div class="chart-card-head">
+              <h2>Activities by month</h2>
+              <div class="chart-actions">
+                <button class="icon-btn" data-chart="chartMonth" data-chart-action="copy" title="Copy chart as image">📋</button>
+                <button class="icon-btn" data-chart="chartMonth" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
+              </div>
+            </div>
             <div class="hint">Count of activities scheduled each month, split by category.</div>
-            <div class="chart-scroll"><svg id="chartMonth" viewBox="0 0 960 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
+            <div class="chart-scroll"><svg id="chartMonth" viewBox="0 0 480 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
             <div class="legend" id="chartMonthLegend"></div>
           </section>
           <section class="chart-card">
-            <h2>Activities by status</h2>
+            <div class="chart-card-head">
+              <h2>Activities by status</h2>
+              <div class="chart-actions">
+                <button class="icon-btn" data-chart="chartStatus" data-chart-action="copy" title="Copy chart as image">📋</button>
+                <button class="icon-btn" data-chart="chartStatus" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
+              </div>
+            </div>
             <div class="hint">How many activities currently sit in each status.</div>
             <div class="chart-scroll"><svg id="chartStatus" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by status"></svg></div>
           </section>
           <section class="chart-card">
-            <h2>Activities by category</h2>
+            <div class="chart-card-head">
+              <h2>Activities by category</h2>
+              <div class="chart-actions">
+                <button class="icon-btn" data-chart="chartCategory" data-chart-action="copy" title="Copy chart as image">📋</button>
+                <button class="icon-btn" data-chart="chartCategory" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
+              </div>
+            </div>
             <div class="hint">Count of activities per category.</div>
             <div class="chart-scroll"><svg id="chartCategory" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by category"></svg></div>
           </section>
           <section class="chart-card">
-            <h2>Planned vs. actual</h2>
+            <div class="chart-card-head">
+              <h2>Planned vs. actual</h2>
+              <div class="chart-actions">
+                <button class="icon-btn" data-chart="chartPlannedActual" data-chart-action="copy" title="Copy chart as image">📋</button>
+                <button class="icon-btn" data-chart="chartPlannedActual" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
+              </div>
+            </div>
             <div class="hint">Each month's planned activities vs. how many finished on time.</div>
-            <div class="chart-scroll"><svg id="chartPlannedActual" viewBox="0 0 960 280" role="img" aria-label="Bar chart of planned vs actual activities per month"></svg></div>
+            <div class="chart-scroll"><svg id="chartPlannedActual" viewBox="0 0 480 280" role="img" aria-label="Bar chart of planned vs actual activities per month"></svg></div>
             <div class="legend" id="chartPlannedActualLegend"></div>
           </section>
         </div>
@@ -118,6 +145,30 @@
             </table>
           </div>
           <div class="pagination" id="pagination"></div>
+        </section>
+      </section>
+
+      <!-- ============ CATEGORIES ============ -->
+      <section id="view-categories" class="view" hidden>
+        <section>
+          <div class="hint" style="margin-bottom:12px;">Manage the category list activities are tagged with. Editing a name updates every activity currently using it; a category still in use can't be deleted until those activities are reassigned.</div>
+          <div class="filters" style="margin-bottom:12px;">
+            <span class="count" id="categoryCount"></span>
+            <button class="btn btn-primary" id="addCategoryBtn">➕ Add category</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Group</th>
+                  <th>Activities using it</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="categoriesTableBody"></tbody>
+            </table>
+          </div>
         </section>
       </section>
 

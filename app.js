@@ -31,6 +31,7 @@
   var ROUTE_TITLES = {
     dashboard: "Dashboard",
     activities: "Activities",
+    categories: "Category",
     timeline: "Calendar / Timeline",
     add: "Add activity",
     reports: "Reports",
@@ -122,6 +123,13 @@
     d.supportingTeam = d.supportingTeam || "";
     d.delayOverrideDays = (d.delayOverrideDays === 0 || d.delayOverrideDays) ? d.delayOverrideDays : "";
     return d;
+  }
+  function normalizeCategory(raw) {
+    return {
+      id: String(raw.id != null ? raw.id : ""),
+      name: raw.name || "",
+      group: CATEGORY_GROUPS.indexOf(raw.group) >= 0 ? raw.group : "Other"
+    };
   }
 
   // =========================================================================
@@ -248,6 +256,43 @@
     return apiPost({ action: "delete", id: id });
   }
 
+  function nextLocalCategoryId() {
+    var max = 0;
+    state.categories.forEach(function (c) { var n = parseInt(c.id, 10); if (!isNaN(n) && n > max) max = n; });
+    return String(max + 1);
+  }
+  function createCategory(fields) {
+    if (!usingLiveApi) {
+      var cat = normalizeCategory(Object.assign({ id: nextLocalCategoryId() }, fields));
+      return Promise.resolve(cat);
+    }
+    return apiPost({ action: "create", sheet: "categories", fields: fields }).then(function (res) { return normalizeCategory(res.category); });
+  }
+  function updateCategory(id, fields) {
+    if (!usingLiveApi) {
+      var cat = state.categories.find(function (c) { return c.id === id; });
+      if (cat) Object.assign(cat, fields);
+      return Promise.resolve(normalizeCategory(Object.assign({ id: id }, cat, fields)));
+    }
+    return apiPost({ action: "update", sheet: "categories", id: id, fields: fields }).then(function (res) { return normalizeCategory(res.category); });
+  }
+  function deleteCategoryRemote(id) {
+    if (!usingLiveApi) return Promise.resolve({ ok: true });
+    return apiPost({ action: "delete", sheet: "categories", id: id });
+  }
+  // Cascades a category rename onto every activity currently using the old
+  // name, one at a time (so a slow connection can't race the Sheet's lock).
+  function renameCategoryOnActivities(oldName, newName, newGroup) {
+    var affected = state.docs.filter(function (d) { return d.category === oldName; });
+    return affected.reduce(function (chain, d) {
+      return chain.then(function () {
+        return updateActivity(d.id, { category: newName, categoryGroup: newGroup }).then(function (updated) {
+          Object.assign(d, updated);
+        });
+      });
+    }, Promise.resolve());
+  }
+
   function saveField(id, field, value, el) {
     var doc = state.docs.find(function (d) { return d.id === id; });
     if (doc) doc[field] = value;
@@ -272,6 +317,7 @@
   // =========================================================================
   var state = {
     docs: [],
+    categories: [],
     route: "dashboard",
     timelineYear: 2026,
     dash: { year: "", month: "", category: "", responsible: "", status: "" },
@@ -284,10 +330,11 @@
   function cacheEls() {
     [
       "sidebar", "sidebarBackdrop", "hamburgerBtn", "mainNav", "routeTitle", "exportBtn", "syncBanner", "sidebarSync",
-      "dfYear", "dfMonth", "dfCategory", "dfResponsible", "dfStatus", "dfReset", "kpiGrid",
+      "dfYear", "dfMonth", "dfCategory", "dfResponsible", "dfStatus", "dfReset", "exportAllChartsBtn", "kpiGrid",
       "chartMonth", "chartMonthLegend", "chartStatus", "chartCategory", "chartPlannedActual", "chartPlannedActualLegend",
       "dashDelaySummary",
       "searchInput", "filterYear", "filterCategory", "filterResponsible", "filterStatus", "rowCount", "tableBody", "pagination",
+      "categoriesTableBody", "categoryCount", "addCategoryBtn",
       "yearToggle", "timelineHint", "timelineBody", "timelineLegend", "delaySummary",
       "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory", "categoryList",
       "fResponsible", "responsibleList", "fSupporting", "supportingList", "fPriority", "fStatus",
@@ -311,6 +358,7 @@
     els.sidebarBackdrop.classList.remove("show");
     if (route === "dashboard") renderDashboard();
     else if (route === "activities") renderActivitiesTable();
+    else if (route === "categories") renderCategoriesTable();
     else if (route === "timeline") { renderYearToggleTimeline(); renderTimeline(); }
     else if (route === "add") { if (!state.editingId && !state.duplicating) resetForm(); populateFormDatalists(); }
     else if (route === "settings") renderSettings();
@@ -404,9 +452,9 @@
     svg.appendChild(t);
   }
 
-  function renderChartMonth(list) {
-    var svg = els.chartMonth;
-    if (!list.length) { emptyChart(svg, "No activities match the current filters.", "0 0 960 320"); els.chartMonthLegend.innerHTML = ""; return; }
+  // Pure data helpers — shared by chart rendering and the CSV export buttons,
+  // so both always agree on exactly what a chart is showing.
+  function computeMonthCategoryCounts(list) {
     var counts = [];
     for (var m = 0; m < 12; m++) { counts.push({}); CATEGORY_GROUPS.forEach(function (g) { counts[m][g] = 0; }); }
     list.forEach(function (d) {
@@ -416,8 +464,42 @@
       counts[m2][g] = (counts[m2][g] || 0) + 1;
     });
     var totals = counts.map(function (c) { return CATEGORY_GROUPS.reduce(function (s, g) { return s + c[g]; }, 0); });
+    return { counts: counts, totals: totals };
+  }
+  function getStatusEntries(list) {
+    return STATUS_LIST.map(function (s) { return { label: s, value: list.filter(function (d) { return d.status === s; }).length }; });
+  }
+  function getCategoryEntries(list) {
+    var cats = uniqueSorted(list, function (d) { return d.category; });
+    return cats.map(function (c) {
+      var count = list.filter(function (d) { return d.category === c; }).length;
+      var g = categorizeToGroup(c);
+      var sample = list.find(function (d) { return d.category === c; });
+      var group = (sample && CATEGORY_GROUPS.indexOf(sample.categoryGroup) >= 0) ? sample.categoryGroup : g;
+      return { label: c, value: count, group: group };
+    }).sort(function (a, b) { return b.value - a.value; });
+  }
+  function computePlannedActualCounts(list) {
+    var today = todayLocal();
+    var planned = [], onTime = [];
+    for (var m = 0; m < 12; m++) { planned.push(0); onTime.push(0); }
+    list.forEach(function (d) {
+      var m2 = (d.month || 1) - 1;
+      if (m2 < 0 || m2 > 11) return;
+      planned[m2]++;
+      var info = computeDelayInfo(d, today);
+      if (info.code === "ontime" || info.code === "completed") onTime[m2]++;
+    });
+    return { planned: planned, onTime: onTime };
+  }
+
+  function renderChartMonth(list) {
+    var svg = els.chartMonth;
+    if (!list.length) { emptyChart(svg, "No activities match the current filters.", "0 0 480 320"); els.chartMonthLegend.innerHTML = ""; return; }
+    var data = computeMonthCategoryCounts(list);
+    var counts = data.counts, totals = data.totals;
     var maxTotal = Math.max(1, Math.max.apply(null, totals));
-    var W = 960, H = 320, padL = 34, padR = 10, padT = 14, padB = 30;
+    var W = 480, H = 320, padL = 34, padR = 10, padT = 14, padB = 30;
     var plotW = W - padL - padR, plotH = H - padT - padB;
     var colW = plotW / 12, barW = colW * 0.6;
     svg.innerHTML = "";
@@ -427,7 +509,7 @@
       var val = Math.ceil(maxTotal * i / ticks);
       var y = padT + plotH - (plotH * i / ticks);
       svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: y, y2: y, stroke: cssVar("--line"), "stroke-width": 1 }));
-      var lbl = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 10, fill: cssVar("--muted") });
+      var lbl = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: cssVar("--muted") });
       lbl.textContent = val;
       svg.appendChild(lbl);
     }
@@ -444,13 +526,23 @@
         titleEl.textContent = MONTH_ABBR[m3] + " — " + g + ": " + v;
         rect.appendChild(titleEl);
         svg.appendChild(rect);
+        // Only label a segment tall enough for a legible number — an
+        // unlabeled sliver still has the tooltip above for its exact value.
+        if (h >= 11) {
+          var segLbl = svgEl("text", {
+            x: x + barW / 2, y: yCursor + h / 2 + 3, "text-anchor": "middle", "font-size": 9, "font-weight": 600,
+            fill: "#fff", stroke: "rgba(0,0,0,0.35)", "stroke-width": 2, "paint-order": "stroke"
+          });
+          segLbl.textContent = v;
+          svg.appendChild(segLbl);
+        }
       });
       if (totals[m3] > 0) {
-        var totLbl = svgEl("text", { x: x + barW / 2, y: padT + plotH - Math.max(0, plotH * (totals[m3] / maxTotal)) - 6, "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: cssVar("--ink") });
+        var totLbl = svgEl("text", { x: x + barW / 2, y: padT + plotH - Math.max(0, plotH * (totals[m3] / maxTotal)) - 6, "text-anchor": "middle", "font-size": 11, "font-weight": 600, fill: cssVar("--ink") });
         totLbl.textContent = totals[m3];
         svg.appendChild(totLbl);
       }
-      var mLbl = svgEl("text", { x: x + barW / 2, y: H - 10, "text-anchor": "middle", "font-size": 11, fill: cssVar("--muted") });
+      var mLbl = svgEl("text", { x: x + barW / 2, y: H - 10, "text-anchor": "middle", "font-size": 12, fill: cssVar("--muted") });
       mLbl.textContent = MONTH_ABBR[m3];
       svg.appendChild(mLbl);
     }
@@ -502,41 +594,27 @@
   }
 
   function renderChartStatus(list) {
-    var entries = STATUS_LIST.map(function (s) {
-      return { label: s, value: list.filter(function (d) { return d.status === s; }).length, color: cssVar("--st-" + statusClass(s).slice(3).toLowerCase()) || cssVar("--accent") };
-    });
     // Fall back to accent color for any status whose CSS var name doesn't match exactly.
     var colorMap = { Planned: "--st-planned", "In Progress": "--st-progress", Completed: "--st-completed", Delayed: "--st-delayed", Rescheduled: "--cat-other", Cancelled: "--st-cancelled" };
-    entries.forEach(function (e) { e.color = cssVar(colorMap[e.label] || "--accent"); });
+    var entries = getStatusEntries(list).map(function (e) {
+      return { label: e.label, value: e.value, color: cssVar(colorMap[e.label] || "--accent") };
+    });
     renderSingleSeriesBarChart(els.chartStatus, entries, 480, 280);
   }
 
   function renderChartCategory(list) {
-    var cats = uniqueSorted(list, function (d) { return d.category; });
-    var entries = cats.map(function (c) {
-      var count = list.filter(function (d) { return d.category === c; }).length;
-      var g = categorizeToGroup(c);
-      var sample = list.find(function (d) { return d.category === c; });
-      var group = (sample && CATEGORY_GROUPS.indexOf(sample.categoryGroup) >= 0) ? sample.categoryGroup : g;
-      return { label: c, value: count, color: groupColor(group) };
-    }).sort(function (a, b) { return b.value - a.value; });
+    var entries = getCategoryEntries(list).map(function (e) {
+      return { label: e.label, value: e.value, color: groupColor(e.group) };
+    });
     renderSingleSeriesBarChart(els.chartCategory, entries, 480, 280);
   }
 
   function renderChartPlannedActual(list) {
     var svg = els.chartPlannedActual;
-    if (!list.length) { emptyChart(svg, "No data for the current filters.", "0 0 960 280"); els.chartPlannedActualLegend.innerHTML = ""; return; }
-    var today = todayLocal();
-    var planned = [], onTime = [];
-    for (var m = 0; m < 12; m++) { planned.push(0); onTime.push(0); }
-    list.forEach(function (d) {
-      var m2 = (d.month || 1) - 1;
-      if (m2 < 0 || m2 > 11) return;
-      planned[m2]++;
-      var info = computeDelayInfo(d, today);
-      if (info.code === "ontime" || info.code === "completed") onTime[m2]++;
-    });
-    var W = 960, H = 280, padL = 34, padR = 10, padT = 14, padB = 30;
+    if (!list.length) { emptyChart(svg, "No data for the current filters.", "0 0 480 280"); els.chartPlannedActualLegend.innerHTML = ""; return; }
+    var pa = computePlannedActualCounts(list);
+    var planned = pa.planned, onTime = pa.onTime;
+    var W = 480, H = 280, padL = 34, padR = 10, padT = 14, padB = 30;
     var plotW = W - padL - padR, plotH = H - padT - padB;
     var colW = plotW / 12, barW = colW * 0.28, gap = colW * 0.06;
     var maxV = Math.max(1, Math.max.apply(null, planned));
@@ -546,15 +624,34 @@
       var val = Math.ceil(maxV * i / 4);
       var y = padT + plotH - (plotH * i / 4);
       svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: y, y2: y, stroke: cssVar("--line"), "stroke-width": 1 }));
-      var lbl = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 10, fill: cssVar("--muted") });
+      var lbl = svgEl("text", { x: padL - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: cssVar("--muted") });
       lbl.textContent = val; svg.appendChild(lbl);
     }
     for (var m3 = 0; m3 < 12; m3++) {
       var groupX = padL + m3 * colW + (colW - (barW * 2 + gap)) / 2;
       var hP = plotH * (planned[m3] / maxV), hA = plotH * (onTime[m3] / maxV);
-      svg.appendChild(svgEl("rect", { x: groupX, y: padT + plotH - hP, width: barW, height: Math.max(hP, 0), fill: cssVar("--st-planned"), rx: 2 }));
-      svg.appendChild(svgEl("rect", { x: groupX + barW + gap, y: padT + plotH - hA, width: barW, height: Math.max(hA, 0), fill: cssVar("--st-completed"), rx: 2 }));
-      var mLbl = svgEl("text", { x: groupX + barW + gap / 2, y: H - 10, "text-anchor": "middle", "font-size": 11, fill: cssVar("--muted") });
+      var yP = padT + plotH - hP, yA = padT + plotH - hA;
+      var rectP = svgEl("rect", { x: groupX, y: yP, width: barW, height: Math.max(hP, 0), fill: cssVar("--st-planned"), rx: 2 });
+      var titleP = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      titleP.textContent = MONTH_ABBR[m3] + " — Planned: " + planned[m3];
+      rectP.appendChild(titleP);
+      svg.appendChild(rectP);
+      var rectA = svgEl("rect", { x: groupX + barW + gap, y: yA, width: barW, height: Math.max(hA, 0), fill: cssVar("--st-completed"), rx: 2 });
+      var titleA = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      titleA.textContent = MONTH_ABBR[m3] + " — On time / completed: " + onTime[m3];
+      rectA.appendChild(titleA);
+      svg.appendChild(rectA);
+      if (planned[m3] > 0) {
+        var vLblP = svgEl("text", { x: groupX + barW / 2, y: Math.max(yP - 4, padT + 8), "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: cssVar("--ink") });
+        vLblP.textContent = planned[m3];
+        svg.appendChild(vLblP);
+      }
+      if (onTime[m3] > 0) {
+        var vLblA = svgEl("text", { x: groupX + barW + gap + barW / 2, y: Math.max(yA - 4, padT + 8), "text-anchor": "middle", "font-size": 10, "font-weight": 600, fill: cssVar("--ink") });
+        vLblA.textContent = onTime[m3];
+        svg.appendChild(vLblA);
+      }
+      var mLbl = svgEl("text", { x: groupX + barW + gap / 2, y: H - 10, "text-anchor": "middle", "font-size": 12, fill: cssVar("--muted") });
       mLbl.textContent = MONTH_ABBR[m3]; svg.appendChild(mLbl);
     }
     svg.appendChild(svgEl("line", { x1: padL, x2: padL, y1: padT, y2: padT + plotH, stroke: cssVar("--line"), "stroke-width": 1 }));
@@ -572,6 +669,165 @@
     renderChartCategory(list);
     renderChartPlannedActual(list);
     renderDelaySummary(list, els.dashDelaySummary, state.dash.year || "all years");
+  }
+
+  // =========================================================================
+  // Dashboard chart export — copy as image, per-chart CSV, all-charts PDF
+  // =========================================================================
+  function downloadCSV(filename, header, rows) {
+    var csv = header.map(csvEscape).join(",") + "\n" + rows.map(function (r) { return r.map(csvEscape).join(","); }).join("\n");
+    var blob = new Blob([csv], { type: "text/csv" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function exportChartCSV(svgId) {
+    var list = getDashDocs();
+    if (svgId === "chartMonth") {
+      var md = computeMonthCategoryCounts(list);
+      var header = ["Month"].concat(CATEGORY_GROUPS, ["Total"]);
+      var rows = MONTH_ABBR.map(function (m, i) {
+        return [m].concat(CATEGORY_GROUPS.map(function (g) { return md.counts[i][g] || 0; }), [md.totals[i]]);
+      });
+      downloadCSV("nqemt2_activities_by_month.csv", header, rows);
+    } else if (svgId === "chartStatus") {
+      var rows2 = getStatusEntries(list).map(function (e) { return [e.label, e.value]; });
+      downloadCSV("nqemt2_activities_by_status.csv", ["Status", "Count"], rows2);
+    } else if (svgId === "chartCategory") {
+      var rows3 = getCategoryEntries(list).map(function (e) { return [e.label, e.group, e.value]; });
+      downloadCSV("nqemt2_activities_by_category.csv", ["Category", "Group", "Count"], rows3);
+    } else if (svgId === "chartPlannedActual") {
+      var pa = computePlannedActualCounts(list);
+      var rows4 = MONTH_ABBR.map(function (m, i) { return [m, pa.planned[i], pa.onTime[i]]; });
+      downloadCSV("nqemt2_planned_vs_actual.csv", ["Month", "Planned", "On time / completed"], rows4);
+    }
+  }
+
+  // Rasterizes an inline chart <svg> to a <canvas> (solid background so a
+  // copy/paste or PDF page never shows a transparent hole), at `scale`x
+  // resolution for a crisp result. Colors in the SVG are already resolved to
+  // literal values by cssVar() at render time, so no external CSS is needed.
+  function svgToCanvas(svg, scale) {
+    scale = scale || 2;
+    return new Promise(function (resolve, reject) {
+      var vb = (svg.getAttribute("viewBox") || "0 0 480 280").split(/\s+/).map(Number);
+      var w = vb[2] || 480, h = vb[3] || 280;
+      var clone = svg.cloneNode(true);
+      clone.setAttribute("width", w);
+      clone.setAttribute("height", h);
+      if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      var xml = new XMLSerializer().serializeToString(clone);
+      var svg64 = window.btoa(unescape(encodeURIComponent(xml)));
+      var settled = false;
+      function settleResolve(v) { if (!settled) { settled = true; clearTimeout(guard); resolve(v); } }
+      function settleReject(e) { if (!settled) { settled = true; clearTimeout(guard); reject(e); } }
+      // Belt-and-suspenders: a data-URI image should decode almost instantly,
+      // but if some browser quirk leaves it hanging, don't leave the caller's
+      // button spinning forever with no feedback.
+      var guard = setTimeout(function () { settleReject(new Error("timed out rendering the chart")); }, 8000);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          var ctx = canvas.getContext("2d");
+          if (!ctx) { settleReject(new Error("this browser can't draw to a canvas")); return; }
+          ctx.fillStyle = cssVar("--surface") || "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, w, h);
+          settleResolve(canvas);
+        } catch (err) {
+          settleReject(err);
+        }
+      };
+      img.onerror = function () { settleReject(new Error("couldn't rasterize the chart")); };
+      img.src = "data:image/svg+xml;base64," + svg64;
+    });
+  }
+
+  function flashChartBtn(btn, text, isErr) {
+    if (!btn) return;
+    var original = btn.getAttribute("data-original-label");
+    if (original == null) { original = btn.textContent; btn.setAttribute("data-original-label", original); }
+    btn.textContent = text;
+    btn.style.color = isErr ? cssVar("--st-delayed") : cssVar("--st-completed");
+    setTimeout(function () { btn.textContent = original; btn.style.color = ""; }, 1600);
+  }
+
+  function copyChartAsImage(svg, btn) {
+    svgToCanvas(svg, 2).then(function (canvas) {
+      return new Promise(function (resolve, reject) {
+        canvas.toBlob(function (blob) {
+          if (!blob) { reject(new Error("couldn't render the image")); return; }
+          if (navigator.clipboard && window.ClipboardItem) {
+            navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]).then(resolve).catch(reject);
+          } else {
+            reject(new Error("clipboard image copy isn't supported in this browser"));
+          }
+        }, "image/png");
+      });
+    }).then(function () {
+      flashChartBtn(btn, "✓", false);
+    }).catch(function (err) {
+      flashChartBtn(btn, "✕", true);
+      window.alert("Couldn't copy the chart as an image (" + err.message + "). Your browser or connection may not support clipboard image copy — this needs a modern browser over HTTPS (GitHub Pages serves over HTTPS, so this should work on the live site).");
+    });
+  }
+
+  function exportAllChartsPDF(btn) {
+    var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) {
+      window.alert("The PDF library hasn't finished loading — check your internet connection and try again in a moment.");
+      return;
+    }
+    var charts = [
+      { svg: els.chartMonth, title: "Activities by Month" },
+      { svg: els.chartStatus, title: "Activities by Status" },
+      { svg: els.chartCategory, title: "Activities by Category" },
+      { svg: els.chartPlannedActual, title: "Planned vs. Actual" }
+    ];
+    Promise.all(charts.map(function (c) {
+      return svgToCanvas(c.svg, 2).then(function (canvas) { return { title: c.title, canvas: canvas }; });
+    })).then(function (results) {
+      var doc = new jsPDFCtor({ orientation: "landscape", unit: "pt", format: "a4" });
+      var pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+      var margin = 36;
+      results.forEach(function (r, i) {
+        if (i > 0) doc.addPage();
+        doc.setFontSize(16);
+        doc.text(r.title, margin, margin);
+        var imgData = r.canvas.toDataURL("image/png");
+        var maxW = pageW - margin * 2, maxH = pageH - margin * 2 - 24;
+        var ratio = Math.min(maxW / r.canvas.width, maxH / r.canvas.height, 1);
+        var w = r.canvas.width * ratio, h = r.canvas.height * ratio;
+        doc.addImage(imgData, "PNG", margin, margin + 16, w, h);
+      });
+      doc.save("nqemt2_dashboard_charts.pdf");
+      if (btn) flashChartBtn(btn, "✓ Saved", false);
+    }).catch(function (err) {
+      if (btn) flashChartBtn(btn, "✕ Failed", true);
+      window.alert("Couldn't generate the PDF: " + err.message);
+    });
+  }
+
+  function wireChartActions() {
+    document.querySelectorAll("button[data-chart-action]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var svg = document.getElementById(btn.getAttribute("data-chart"));
+        var action = btn.getAttribute("data-chart-action");
+        if (!svg) return;
+        if (action === "copy") copyChartAsImage(svg, btn);
+        else if (action === "csv") exportChartCSV(svg.id);
+      });
+    });
+    if (els.exportAllChartsBtn) {
+      els.exportAllChartsBtn.addEventListener("click", function () { exportAllChartsPDF(els.exportAllChartsBtn); });
+    }
   }
 
   function wireDashFilters() {
@@ -784,6 +1040,111 @@
   }
 
   // =========================================================================
+  // Categories (add / edit / delete the category list activities use)
+  // =========================================================================
+  function renderCategoriesTable() {
+    var cats = state.categories.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    els.categoryCount.textContent = cats.length + " categor" + (cats.length === 1 ? "y" : "ies");
+    els.categoriesTableBody.innerHTML = cats.map(function (c) {
+      var count = state.docs.filter(function (d) { return d.category === c.name; }).length;
+      return '<tr>' +
+        '<td class="activity-name">' + escapeHtml(c.name) + '</td>' +
+        '<td><span class="cat-chip"><span class="dot" style="background:' + groupColor(c.group) + '"></span>' + escapeHtml(c.group) + '</span></td>' +
+        '<td>' + count + '</td>' +
+        '<td><div class="row-actions">' +
+          '<button class="icon-btn" data-action="edit-cat" data-id="' + c.id + '" title="Edit">✏️</button>' +
+          '<button class="icon-btn danger" data-action="delete-cat" data-id="' + c.id + '" title="Delete">🗑</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join("") || '<tr><td colspan="4" style="text-align:center; color:var(--muted); padding:24px;">No categories yet — add one to get started.</td></tr>';
+  }
+
+  function categoryModalForm(c) {
+    c = c || { id: "", name: "", group: "Other" };
+    var groupOptions = CATEGORY_GROUPS.map(function (g) {
+      return '<option value="' + escapeHtml(g) + '"' + (g === c.group ? " selected" : "") + '>' + escapeHtml(g) + '</option>';
+    }).join("");
+    return '<button class="modal-close" id="modalCloseBtn" aria-label="Close">✕</button>' +
+      '<h3>' + (c.id ? "Edit category" : "Add category") + '</h3>' +
+      '<form id="categoryForm">' +
+        '<div class="form-grid">' +
+          '<div class="field field-wide"><label for="catName">Category name *</label><input type="text" id="catName" required value="' + escapeHtml(c.name) + '" placeholder="e.g. Coaching"></div>' +
+          '<div class="field field-wide"><label for="catGroup">Group (used for chart colors) *</label><select id="catGroup" required>' + groupOptions + '</select></div>' +
+        '</div>' +
+        '<div id="catFormMsg" class="form-msg" hidden></div>' +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary">' + (c.id ? "Save changes" : "Add category") + '</button><button type="button" class="btn" id="catCancelBtn">Cancel</button></div>' +
+      '</form>';
+  }
+
+  function openCategoryModal(existing) {
+    openModal(categoryModalForm(existing));
+    var closeBtn = document.getElementById("modalCloseBtn"), cancelBtn = document.getElementById("catCancelBtn");
+    closeBtn.addEventListener("click", closeModal);
+    cancelBtn.addEventListener("click", closeModal);
+    document.getElementById("categoryForm").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var name = document.getElementById("catName").value.trim();
+      var group = document.getElementById("catGroup").value;
+      var msgEl = document.getElementById("catFormMsg");
+      function showMsg(text, kind) { msgEl.hidden = false; msgEl.className = "form-msg " + (kind || ""); msgEl.textContent = text; }
+      if (!name) { showMsg("Category name is required.", "err"); return; }
+      var dup = state.categories.find(function (c) { return c.name.toLowerCase() === name.toLowerCase() && (!existing || c.id !== existing.id); });
+      if (dup) { showMsg("A category named \"" + name + "\" already exists.", "err"); return; }
+
+      var submitBtn = ev.target.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
+
+      if (existing && existing.id) {
+        var oldName = existing.name;
+        updateCategory(existing.id, { name: name, group: group }).then(function (updated) {
+          var idx = state.categories.findIndex(function (c) { return c.id === existing.id; });
+          if (idx >= 0) state.categories[idx] = updated;
+          if (oldName !== name) return renameCategoryOnActivities(oldName, name, group);
+        }).then(function () {
+          closeModal();
+          renderAll();
+        }).catch(function (err) { showMsg("Couldn't save: " + err.message, "err"); submitBtn.disabled = false; });
+      } else {
+        createCategory({ name: name, group: group }).then(function (created) {
+          state.categories.push(created);
+          closeModal();
+          renderAll();
+        }).catch(function (err) { showMsg("Couldn't save: " + err.message, "err"); submitBtn.disabled = false; });
+      }
+    });
+  }
+
+  function deleteCategoryRow(id) {
+    var c = state.categories.find(function (x) { return x.id === id; });
+    if (!c) return;
+    var inUse = state.docs.filter(function (d) { return d.category === c.name; }).length;
+    if (inUse > 0) {
+      window.alert("\"" + c.name + "\" is still used by " + inUse + " activit" + (inUse === 1 ? "y" : "ies") + ". Reassign " + (inUse === 1 ? "it" : "them") + " to a different category on the Activities page first, then delete this category.");
+      return;
+    }
+    if (!window.confirm("Delete the category \"" + c.name + "\"? This cannot be undone.")) return;
+    deleteCategoryRemote(id).then(function () {
+      state.categories = state.categories.filter(function (x) { return x.id !== id; });
+      renderAll();
+    }).catch(function (err) { window.alert("Delete failed: " + err.message); });
+  }
+
+  function wireCategoriesControls() {
+    els.addCategoryBtn.addEventListener("click", function () { openCategoryModal(null); });
+    els.categoriesTableBody.addEventListener("click", function (ev) {
+      var btn = ev.target.closest ? ev.target.closest("button[data-action]") : null;
+      if (!btn) return;
+      var id = btn.getAttribute("data-id"), action = btn.getAttribute("data-action");
+      if (action === "edit-cat") {
+        var c = state.categories.find(function (x) { return x.id === id; });
+        if (c) openCategoryModal(c);
+      } else if (action === "delete-cat") {
+        deleteCategoryRow(id);
+      }
+    });
+  }
+
+  // =========================================================================
   // Timeline (year toggle + Gantt-style bars + week scale)
   // =========================================================================
   function renderYearToggleTimeline() {
@@ -857,7 +1218,7 @@
             var aed = (aedDate.getFullYear() === state.timelineYear && (aedDate.getMonth() + 1) === m) ? Math.min(aedDate.getDate(), dim) : dim;
             var aLeft = ((asd - 1) / dim * 100).toFixed(2), aWidth = Math.max(((aed - asd + 1) / dim * 100), 2.2).toFixed(2);
             actualBar = '<div class="bar-actual code-' + info.code + '" data-row="row-' + d.id + '" ' +
-              'style="left:' + aLeft + '%; width:' + aWidth + '%; top:' + (top + 20) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '"></div>';
+              'style="left:' + aLeft + '%; width:' + aWidth + '%; top:' + (top + 20) + 'px; background-color:' + cssVar("--tl-actual") + ';" title="' + tip + '"></div>';
           }
         }
         return plannedBar + actualBar;
@@ -906,7 +1267,10 @@
     els.fStatus.innerHTML = STATUS_LIST.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
   }
   function populateFormDatalists() {
-    els.categoryList.innerHTML = uniqueSorted(state.docs, function (d) { return d.category; }).map(function (c) { return '<option value="' + escapeHtml(c) + '">'; }).join("");
+    var catNames = uniqueSorted(state.categories, function (c) { return c.name; });
+    uniqueSorted(state.docs, function (d) { return d.category; }).forEach(function (c) { if (catNames.indexOf(c) === -1) catNames.push(c); });
+    catNames.sort();
+    els.categoryList.innerHTML = catNames.map(function (c) { return '<option value="' + escapeHtml(c) + '">'; }).join("");
     els.responsibleList.innerHTML = uniqueSorted(state.docs, function (d) { return d.responsiblePerson; }).map(function (p) { return '<option value="' + escapeHtml(p) + '">'; }).join("");
     els.supportingList.innerHTML = uniqueSorted(state.docs, function (d) { return d.supportingTeam; }).map(function (p) { return '<option value="' + escapeHtml(p) + '">'; }).join("");
   }
@@ -1109,6 +1473,7 @@
   function renderAll() {
     renderDashboard();
     renderActivitiesTable();
+    renderCategoriesTable();
     renderYearToggleTimeline();
     renderTimeline();
     populateFormDatalists();
@@ -1116,19 +1481,30 @@
     els.sidebarSync.textContent = usingLiveApi ? "🟢 Live (Google Sheet)" : "🟡 Demo mode";
   }
 
+  function fetchLiveCategories() {
+    var url = API_URL + (API_URL.indexOf("?") === -1 ? "?" : "&") + "sheet=categories";
+    return fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (res) { return (res && res.ok && Array.isArray(res.categories)) ? res.categories : []; })
+      .catch(function () { return []; }); // best-effort — an older deployment or missing tab just starts with no categories
+  }
+
   function boot() {
     cacheEls();
     wireNav();
     wireDashFilters();
+    wireChartActions();
     wireActivitiesControls();
+    wireCategoriesControls();
     wireModal();
     wireSettings();
     populateFormStaticOptions();
     els.activityForm.addEventListener("submit", handleFormSubmit);
     els.formCancelBtn.addEventListener("click", cancelEdit);
 
-    function finishBoot(docs) {
+    function finishBoot(docs, cats) {
       state.docs = docs.map(normalizeDoc);
+      state.categories = (cats || []).map(normalizeCategory);
       var years = uniqueSorted(state.docs, function (d) { return d.year; });
       if (years.length) { state.timelineYear = years[years.length - 1]; state.dash.year = String(state.timelineYear); }
       renderAll();
@@ -1138,7 +1514,7 @@
     if (!usingLiveApi) {
       els.syncBanner.hidden = false;
       els.syncBanner.textContent = "Running in demo mode on a bundled sample — edits won't be saved. Set API_URL in config.js to your deployed Apps Script URL to go live.";
-      finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)));
+      finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)), typeof SAMPLE_CATEGORIES !== "undefined" ? JSON.parse(JSON.stringify(SAMPLE_CATEGORIES)) : []);
       return;
     }
     fetch(API_URL)
@@ -1146,12 +1522,12 @@
       .then(function (res) {
         if (!res || !res.ok || !Array.isArray(res.activities)) throw new Error("bad response");
         els.syncBanner.hidden = true;
-        finishBoot(res.activities);
+        return fetchLiveCategories().then(function (cats) { finishBoot(res.activities, cats); });
       })
       .catch(function (err) {
         els.syncBanner.hidden = false;
         els.syncBanner.textContent = "Couldn't reach the Apps Script API (" + err.message + "). Showing the bundled sample instead.";
-        finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)));
+        finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)), typeof SAMPLE_CATEGORIES !== "undefined" ? JSON.parse(JSON.stringify(SAMPLE_CATEGORIES)) : []);
       });
   }
 

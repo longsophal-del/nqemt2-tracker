@@ -17,6 +17,7 @@
   --st-planned:#3B6EA5;
   --st-delayed:#E5484D;
   --st-cancelled:#8A8F87;
+  --tl-actual:#2F6FED;
   --shadow: 0 1px 2px rgba(24,43,42,0.06), 0 4px 14px rgba(24,43,42,0.06);
 }
 @media (prefers-color-scheme: dark){
@@ -26,6 +27,7 @@
     --cat-training:#3FBBAE; --cat-qiwg:#D9A354; --cat-coaching:#7C9BE0; --cat-meetings:#E08469;
     --cat-assessment:#B79BCB; --cat-other:#9AA39A;
     --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-delayed:#FF6B6B; --st-cancelled:#9AA39A;
+    --tl-actual:#6EA8FF;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
   }
 }
@@ -35,6 +37,7 @@
   --cat-training:#3FBBAE; --cat-qiwg:#D9A354; --cat-coaching:#7C9BE0; --cat-meetings:#E08469;
   --cat-assessment:#B79BCB; --cat-other:#9AA39A;
   --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-delayed:#FF6B6B; --st-cancelled:#9AA39A;
+  --tl-actual:#6EA8FF;
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
 }
 
@@ -184,7 +187,7 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 
 .tl-legend{margin-top:10px; margin-bottom:2px;}
 .tl-swatch{background:var(--accent); width:14px; border-radius:3px;}
-.tl-swatch-actual{background:var(--accent); width:14px; border-radius:3px; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.5) 0 3px, transparent 3px 7px);}
+.tl-swatch-actual{background:var(--tl-actual); width:14px; border-radius:3px; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.5) 0 3px, transparent 3px 7px);}
 
 .delay-summary{margin-top:14px; padding-top:12px; border-top:1px solid var(--line);}
 .ds-title{font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px;}
@@ -266,6 +269,10 @@ footer.note{color:var(--muted); font-size:11.5px; text-align:center; padding-top
 .chart-card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 20px; box-shadow:var(--shadow);}
 .chart-card h2{font-size:15px; font-weight:600; margin-bottom:2px;}
 .chart-card svg{display:block; width:100%; height:auto;}
+.chart-card-head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+.chart-card-head h2{margin-bottom:0;}
+.chart-actions{display:flex; gap:4px; flex-shrink:0;}
+.chart-actions .icon-btn{font-size:13px; transition:color .2s;}
 
 /* ---------- Forms (Add / Edit activity) ---------- */
 .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin-top:14px;}

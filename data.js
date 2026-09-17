@@ -130,3 +130,21 @@ const SAMPLE_ACTIVITIES = [
   {"id":"127","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-03","endDate":"2026-12-03","startDay":3,"endDay":3,"activity":"OD Assessors on Tool","category":"Assessment","categoryGroup":"Assessment","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":""},
   {"id":"128","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-14","endDate":"2026-12-14","startDay":14,"endDay":14,"activity":"QIWG Validation","category":"QIWG","categoryGroup":"QIWG","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":""}
 ];
+
+// Bundled sample category list — used only until config.js's API_URL points at
+// a real Apps Script deployment. Derived from the categories already present
+// in SAMPLE_ACTIVITIES above; group drives chart/legend colors.
+const SAMPLE_CATEGORIES = [
+{"id":"1","name":"QIWG","group":"QIWG"},
+{"id":"2","name":"MOH","group":"Meetings & Partners"},
+{"id":"3","name":"Consultative Workshop","group":"Training & Workshops"},
+{"id":"4","name":"Training","group":"Training & Workshops"},
+{"id":"5","name":"Other","group":"Other"},
+{"id":"6","name":"ADB","group":"Meetings & Partners"},
+{"id":"7","name":"Curriculum/Guide Dev","group":"Training & Workshops"},
+{"id":"8","name":"Workshop","group":"Training & Workshops"},
+{"id":"9","name":"Meeting","group":"Meetings & Partners"},
+{"id":"10","name":"Coaching","group":"Coaching"},
+{"id":"11","name":"Holiday","group":"Other"},
+{"id":"12","name":"Assessment","group":"Assessment"}
+];
