@@ -58,7 +58,7 @@ h1,h2,h3{font-family:"Fraunces","Iowan Old Style",Georgia,serif; text-wrap:balan
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; z-index:60;
 }
 .brand{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid var(--line);}
-.brand-mark{font-size:22px; line-height:1;}
+.brand-mark{width:32px; height:32px; object-fit:contain; flex:none; display:block;}
 .brand-title{font-family:"Fraunces",serif; font-weight:600; font-size:15px; color:var(--ink);}
 .brand-sub{font-size:10.5px; color:var(--muted);}
 .nav{display:flex; flex-direction:column; padding:10px; gap:2px; flex:1;}
