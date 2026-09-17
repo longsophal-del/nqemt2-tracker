@@ -1291,41 +1291,40 @@
   var SCH_COL_PX = 110; // fixed px width per week column in the Gantt grid
   // Week columns are REAL Sunday–Saturday calendar weeks (the same weeks
   // you'd see on any calendar) — not an artificial even split of each
-  // month's day count. A week that straddles two months (e.g. the week
-  // containing both the last days of one month and the first of the next)
-  // is grouped under whichever month holds most of its days, exactly like a
-  // normal month-view calendar does, so "W3" always means the same real
-  // 7-day week regardless of which month header it happens to sit under.
-  function scheduleYearWeekEpoch(year) {
-    var jan1 = new Date(year, 0, 1);
-    return new Date(year, 0, 1 - jan1.getDay()); // the Sunday on/before Jan 1
+  // month's day count. Each month's week-columns are built independently and
+  // CLIPPED to that month's own days: if the month doesn't start on a Sunday
+  // or end on a Saturday, its first and/or last column is a partial week
+  // (fewer than 7 real days). This guarantees a date always renders under
+  // its own real month's header — never under the neighboring month, the
+  // way a "majority of the week" rule could. Internal (non-boundary) weeks
+  // within a month are still full, real 7-day calendar weeks (e.g. Jan
+  // 11–17 stays one whole-week column), matching a normal wall calendar.
+  // The pixel-per-day rate is always SCH_COL_PX / 7, even inside a partial
+  // boundary segment, so "2 Days" always spans the same width regardless of
+  // which segment it falls in.
+  function scheduleMonthWeekSegments(year, month) {
+    var dim = daysInMonth(year, month);
+    var firstDow = new Date(year, month - 1, 1).getDay(); // 0=Sun..6=Sat
+    var segs = [], day = 1;
+    var firstLen = Math.min(7 - firstDow, dim);
+    segs.push({ startDay: day, endDay: day + firstLen - 1 });
+    day += firstLen;
+    while (day <= dim) {
+      var len = Math.min(7, dim - day + 1);
+      segs.push({ startDay: day, endDay: day + len - 1 });
+      day += len;
+    }
+    return segs;
   }
   function buildScheduleLayout(year) {
-    var weekEpoch = scheduleYearWeekEpoch(year);
-    var yearEnd = new Date(year, 11, 31);
-    var totalWeeks = Math.floor(diffDays(yearEnd, weekEpoch) / 7) + 1;
-
-    var monthStartCol = [], segsByMonth = [], colForWeek = {}, col = 0;
-    for (var m = 1; m <= 12; m++) { segsByMonth[m] = []; }
-
-    for (var w = 0; w < totalWeeks; w++) {
-      var wStart = new Date(weekEpoch.getFullYear(), weekEpoch.getMonth(), weekEpoch.getDate() + w * 7);
-      var bestMonth = null, bestCount = -1, counts = {};
-      for (var i = 0; i < 7; i++) {
-        var day = new Date(wStart.getFullYear(), wStart.getMonth(), wStart.getDate() + i);
-        if (day.getFullYear() !== year) continue; // outside the shown year — ignore for the majority count
-        var m2 = day.getMonth() + 1;
-        counts[m2] = (counts[m2] || 0) + 1;
-        if (counts[m2] > bestCount) { bestCount = counts[m2]; bestMonth = m2; }
-      }
-      if (bestMonth != null) segsByMonth[bestMonth].push(w); // weeks are pushed in chronological order already
+    var monthStartCol = [], segsByMonth = [], col = 0;
+    for (var m = 1; m <= 12; m++) {
+      var segs = scheduleMonthWeekSegments(year, m);
+      monthStartCol[m] = col;
+      segsByMonth[m] = segs;
+      col += segs.length;
     }
-    for (var m3 = 1; m3 <= 12; m3++) {
-      monthStartCol[m3] = col;
-      segsByMonth[m3].forEach(function (w2, i2) { colForWeek[w2] = col + i2; });
-      col += segsByMonth[m3].length;
-    }
-    return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth, colForWeek: colForWeek, weekEpoch: weekEpoch };
+    return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth };
   }
   // Measures how wide a Schedule Timeline bar's label needs to be so it
   // never truncates ("5 Days" must never clip to "5 Da…"). Uses a canvas to
@@ -1360,16 +1359,25 @@
   // Position (in px) of a given real date within the full-year grid.
   // endInclusive:false -> the leading edge of that day (bar start);
   // endInclusive:true  -> the trailing edge of that day (bar end, so the
-  // whole day is included in the bar's width). Every real week is exactly 7
-  // days, so this is just: which week column, plus how far through that
-  // week's 7 days this date falls.
+  // whole day is included in the bar's width). The pixel-per-day rate is
+  // always SCH_COL_PX / 7 (using the date's real day-of-week, 0=Sun..6=Sat)
+  // even when the date falls in a partial (boundary) week-segment — only
+  // the segment's own column width on screen is narrower; the date-to-px
+  // rate itself never changes.
   function schedulePx(layout, date, endInclusive) {
-    var wIdx = Math.floor(diffDays(new Date(date.getFullYear(), date.getMonth(), date.getDate()), layout.weekEpoch) / 7);
-    var col = layout.colForWeek[wIdx];
-    if (col == null) col = (wIdx < 0) ? 0 : layout.totalCols; // outside this year's grid entirely (shouldn't occur once clamped)
-    var dow = date.getDay(); // 0 (Sun) .. 6 (Sat) — position within that real week
-    var offset = endInclusive ? dow + 1 : dow;
-    return (col + offset / 7) * SCH_COL_PX;
+    var month = date.getMonth() + 1, day = date.getDate();
+    var segs = layout.segsByMonth[month];
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (day >= s.startDay && day <= s.endDay) {
+        var dow = date.getDay(); // 0 (Sun) .. 6 (Sat) — position within the real week
+        var offset = endInclusive ? dow + 1 : dow;
+        return (layout.monthStartCol[month] + i + offset / 7) * SCH_COL_PX;
+      }
+    }
+    // Shouldn't occur once clamped to the displayed year, but fail safe to
+    // the end of that month's columns.
+    return (layout.monthStartCol[month] + segs.length) * SCH_COL_PX;
   }
   // Clamps a date onto the displayed year's grid (for activities that start
   // before or end after the year shown) — returns an in-range Date.
