@@ -21,6 +21,7 @@
   var MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var DAY_MS = 86400000;
   var DELAY_INFO = {
+    upcoming: { label: "Upcoming", swatch: "--st-upcoming" },
     ontime: { label: "On Time", swatch: "--st-planned" },
     delayed: { label: "Delayed", swatch: "--st-delayed" },
     completed: { label: "Completed", swatch: "--st-completed" },
@@ -137,9 +138,15 @@
   // Auto-computed delay engine
   // =========================================================================
   // Returns {code, label, delayDays} — delayDays > 0 means late. `code` is
-  // one of: ontime | delayed | completed | completed-delayed | rescheduled | cancelled.
+  // one of: upcoming | ontime | delayed | completed | completed-delayed | rescheduled | cancelled.
+  // "Upcoming" = the planned start date hasn't arrived yet (nothing underway
+  // yet). "On Time" = the planned period has started, the planned end date
+  // hasn't passed, and nothing about it looks late yet — i.e. it's currently
+  // underway and still tracking on schedule.
   function computeDelayInfo(d, today) {
     if (d.status === "Cancelled") return { code: "cancelled", label: DELAY_INFO.cancelled.label, delayDays: 0 };
+
+    var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate);
 
     // Manual override escape hatch — the only way delay days can be typed
     // directly, per spec ("do not allow users to manually type the delay
@@ -148,13 +155,14 @@
       var ov = Number(d.delayOverrideDays);
       if (ov <= 0) {
         var doneOv = !!(d.actualEnd || d.status === "Completed");
-        return { code: doneOv ? "completed" : "ontime", label: doneOv ? DELAY_INFO.completed.label : DELAY_INFO.ontime.label, delayDays: 0 };
+        if (doneOv) return { code: "completed", label: DELAY_INFO.completed.label, delayDays: 0 };
+        var upcomingOv = !!(pStart && today.getTime() < pStart.getTime());
+        return { code: upcomingOv ? "upcoming" : "ontime", label: upcomingOv ? DELAY_INFO.upcoming.label : DELAY_INFO.ontime.label, delayDays: 0 };
       }
       var lateOv = !!(d.actualEnd || d.status === "Completed");
       return { code: lateOv ? "completed-delayed" : "delayed", label: lateOv ? DELAY_INFO["completed-delayed"].label : DELAY_INFO.delayed.label, delayDays: ov };
     }
 
-    var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate);
     if (!pStart || !pEnd) return { code: "ontime", label: DELAY_INFO.ontime.label, delayDays: 0 };
 
     var aStart = parseDateLocal(d.actualStart), aEnd = parseDateLocal(d.actualEnd);
@@ -167,11 +175,14 @@
         if (delta > 0) return { code: "completed-delayed", label: DELAY_INFO["completed-delayed"].label, delayDays: delta };
         return { code: "completed", label: DELAY_INFO.completed.label, delayDays: delta < 0 ? delta : 0 };
       }
+      // Actual start recorded but not yet an actual end — it has genuinely
+      // started, so this is "on time" (or delayed), never "upcoming".
       if (today.getTime() > pEnd.getTime()) return { code: "delayed", label: DELAY_INFO.delayed.label, delayDays: diffDays(today, pEnd) };
       return { code: "ontime", label: DELAY_INFO.ontime.label, delayDays: 0 };
     }
     if (d.status === "Completed") return { code: "completed", label: DELAY_INFO.completed.label, delayDays: 0 };
     if (today.getTime() > pEnd.getTime()) return { code: "delayed", label: DELAY_INFO.delayed.label, delayDays: diffDays(today, pEnd) };
+    if (today.getTime() < pStart.getTime()) return { code: "upcoming", label: DELAY_INFO.upcoming.label, delayDays: 0 };
     return { code: "ontime", label: DELAY_INFO.ontime.label, delayDays: 0 };
   }
 
@@ -493,7 +504,7 @@
       if (m2 < 0 || m2 > 11) return;
       planned[m2]++;
       var info = computeDelayInfo(d, today);
-      if (info.code === "ontime" || info.code === "completed") onTime[m2]++;
+      if (info.code === "ontime" || info.code === "upcoming" || info.code === "completed") onTime[m2]++;
     });
     return { planned: planned, onTime: onTime };
   }
@@ -865,6 +876,7 @@
     var infos = list.map(function (d) { return computeDelayInfo(d, today); });
     var total = list.length;
     var completed = infos.filter(function (i) { return i.code === "completed" || i.code === "completed-delayed"; }).length;
+    var upcoming = infos.filter(function (i) { return i.code === "upcoming"; }).length;
     var onTime = infos.filter(function (i) { return i.code === "ontime"; }).length;
     var delayed = infos.filter(function (i) { return i.code === "delayed"; }).length;
     var rescheduled = infos.filter(function (i) { return i.code === "rescheduled"; }).length;
@@ -873,6 +885,7 @@
     var cards = [
       ["Total activities", total, ""],
       ["Completed", completed, "completed"],
+      ["Upcoming", upcoming, "upcoming"],
       ["On time", onTime, "planned"],
       ["Delayed", delayed, "delayed"],
       ["Rescheduled", rescheduled, "other"],
@@ -889,6 +902,7 @@
     var items = [
       ["Planned period", "solid"],
       ["Actual period (when different)", "actual"],
+      ["Upcoming", "--st-upcoming"],
       ["Delayed ⚠", "--st-delayed"],
       ["Completed ✓", "--st-completed"],
       ["Rescheduled ↺", "--cat-other"]
@@ -1304,6 +1318,36 @@
     }
     return { totalCols: col, monthStartCol: monthStartCol, segsByMonth: segsByMonth };
   }
+  // Measures how wide a Schedule Timeline bar's label needs to be so it
+  // never truncates ("5 Days" must never clip to "5 Da…"). Uses a canvas to
+  // measure the exact rendered width of the text in the bar's real font;
+  // falls back to a conservative per-character estimate if canvas text
+  // measurement isn't available (e.g. some test/headless environments).
+  var _schMeasureCtx;
+  function schMeasureTextWidth(text) {
+    if (_schMeasureCtx === undefined) {
+      try {
+        var c = document.createElement("canvas");
+        _schMeasureCtx = c.getContext ? c.getContext("2d") : null;
+        if (_schMeasureCtx) _schMeasureCtx.font = '500 10px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      } catch (e) { _schMeasureCtx = null; }
+    }
+    if (_schMeasureCtx && typeof _schMeasureCtx.measureText === "function") {
+      var w = _schMeasureCtx.measureText(text).width;
+      if (w > 0) return w;
+    }
+    return text.length * 6.4; // fallback estimate, tuned generously wide
+  }
+  // Minimum bar width (px) that fits the label + delay icon + the bar's own
+  // padding/border without clipping, so a short (e.g. 1-2 day) activity's
+  // bar never truncates its "N Days" text.
+  function schBarMinWidth(label, hasIcon) {
+    var textW = schMeasureTextWidth(label);
+    var iconW = hasIcon ? 14 : 0; // icon glyph + flex gap
+    var paddingW = 12; // .sch-bar padding:0 6px
+    var borderBuffer = 6; // border, box-shadow, and a small safety margin
+    return Math.ceil(textW + iconW + paddingW + borderBuffer);
+  }
   // Position (in px) of a given day within the full-year grid.
   // endInclusive:false -> the leading edge of that day (bar start);
   // endInclusive:true  -> the trailing edge of that day (bar end, so the
@@ -1397,23 +1441,31 @@
       var cs = scheduleClamp(pStart, year, "start"), ce = scheduleClamp(pEnd, year, "end");
       var left = schedulePx(layout, cs.month, cs.day, false);
       var right = schedulePx(layout, ce.month, ce.day, true);
-      var width = Math.max(right - left, 6);
 
       var icon = info.code === "delayed" ? "⚠" : info.code === "rescheduled" ? "↺" :
         info.code === "completed-delayed" ? "⚑" : info.code === "completed" ? "✓" :
         info.code === "cancelled" ? "🚫" : "";
       var delayText = info.label + (info.delayDays > 0 ? " (" + info.delayDays + "d)" : (info.delayDays < 0 ? " (" + Math.abs(info.delayDays) + "d early)" : ""));
+      // Budget days = the full length of the planned (budget) period, Planned
+      // Start through Planned End inclusive — independent of the current
+      // year's clamped bar position, so it's correct even when the bar is
+      // cut off at the edge of the visible year.
+      var budgetDays = (pStart && pEnd) ? (diffDays(pEnd, pStart) + 1) : null;
+      var budgetDaysLabel = budgetDays != null ? (budgetDays + (budgetDays === 1 ? " Day" : " Days")) : "—";
+      // Never let a short activity's bar be narrower than its own label —
+      // "5 Days" must always render in full, never clip to "5 Da…".
+      var width = Math.max(right - left, schBarMinWidth(budgetDaysLabel, !!icon));
       var tip = escapeHtml(d.activity) +
         "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
         "\nCategory: " + escapeHtml(d.category || "—") +
-        "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) +
+        "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) + (budgetDays != null ? " (" + budgetDaysLabel + ")" : "") +
         "\nActual: " + (d.actualStart || d.actualEnd ? (prettyDate(d.actualStart) + " – " + prettyDate(d.actualEnd)) : "—") +
         "\nStatus: " + escapeHtml(d.status) +
         "\nDelay Days: " + (info.delayDays > 0 ? info.delayDays : 0);
 
       var plannedBar = '<div class="sch-bar code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
         'style="left:' + left.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '">' +
-        (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(d.activity) + '</div>';
+        (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(budgetDaysLabel) + '</div>';
 
       var actualBar = "";
       var aStart = parseDateLocal(d.actualStart), aEnd = parseDateLocal(d.actualEnd);
@@ -1430,6 +1482,8 @@
       return '<tr>' +
         '<td class="sch-activity-cell">' +
           '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + escapeHtml(d.activity) + '</div>' +
+          '<div class="sch-category" title="Budget category: ' + escapeHtml(d.category || "—") + '">' + escapeHtml(d.category || "—") + '</div>' +
+          '<div class="sch-dates" title="Budget period: ' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '">' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '</div>' +
           '<div class="sch-chips">' +
             '<span class="cat-chip">' + escapeHtml(d.status) + '</span>' +
             '<span class="delay-chip dc-' + info.code + '">' + escapeHtml(delayText) + '</span>' +

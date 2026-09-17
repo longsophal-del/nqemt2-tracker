@@ -157,9 +157,13 @@ There's also an optional **Delay override (days)** field, per the spec's
 blank and delay is auto-computed from dates; fill it in only if you need to
 force a specific delay figure.
 
-### Delay engine (unchanged from the Timeline update, used everywhere now)
+### Delay engine (used everywhere — Dashboard, Activities, Timeline, Schedule Timeline)
 
-- **On Time** — planned end date hasn't passed yet, no actual dates entered.
+- **Upcoming** — the planned start date hasn't arrived yet; nothing has
+  started.
+- **On Time** — the planned period has started, the planned end date hasn't
+  passed yet, and nothing about it looks late — i.e. it's currently underway
+  and still tracking on schedule.
 - **Delayed** — planned end date has passed and no actual end date is
   recorded yet.
 - **Completed** — an actual end date is recorded on/before the planned end.
@@ -168,6 +172,13 @@ force a specific delay figure.
 - **Rescheduled** — the actual period doesn't overlap the planned period at
   all.
 - **Cancelled** — driven by the Status field, same as before.
+
+**Upcoming vs. On Time**, since these look similar at a glance: both mean
+"nothing to worry about yet," but Upcoming means it hasn't begun, while On
+Time means it has begun (today is on/after the planned start) and is still
+within its planned window. This is separate from the manual Status field —
+an activity can show Status "Planned" while its Delay reads "On Time"
+because it entered its planned window without anyone updating Status yet.
 
 ### Timeline
 
@@ -197,15 +208,29 @@ in the reference you shared. The Activities column stays pinned on the left
 while you scroll sideways through the year, and the header row stays pinned
 while you scroll down through a long activity list.
 
-Each row shows the planned period as a colored bar (colored by category,
-same as the other charts), with a second, hatched bar underneath for the
-Actual Start/End dates whenever they're recorded and differ from the plan.
-Under the activity name you'll see its Status and an auto-computed Delay
-chip (On Time / Delayed +Nd / Completed / Rescheduled / Cancelled, same
-delay engine as everywhere else in the app). Filters at the top narrow it
-down by Year (which year's Jan–Dec grid to show), Month, Category,
-Responsible Person, and Status. Clicking any bar opens that activity's full
-detail popup (the same one as the Activities page's "View" button).
+Each row shows the planned (budget) period as a colored bar (colored by
+category, same as the other charts), with a second, hatched bar underneath
+for the Actual Start/End dates whenever they're recorded and differ from the
+plan. Instead of the activity name, the bar itself is labeled with the
+total number of budget days it covers (e.g. "30 Days" — Planned Start
+through Planned End, inclusive), and the bar's left/right edges are
+positioned from the real Planned Start/End dates, so it stretches across
+every week/month it actually spans, however long the budget period is —
+hovering it still shows the full detail (activity, category, exact dates,
+status, delay) as a tooltip. Short activities (a handful of days) get a bar
+wide enough to always show their full label ("5 Days" never clips to
+"5 Da…") even though that's a bit wider than their true day-span on the
+grid; longer activities are unaffected and are still sized exactly to
+their real dates. Under the activity name in the pinned column
+you'll now also see its Budget Category (the same Category field used
+everywhere else), its Budget Start – End dates (the same Planned Start/End
+dates, formatted as a range), then its Status and an auto-computed Delay
+chip (Upcoming / On Time / Delayed +Nd / Completed / Rescheduled /
+Cancelled, same delay engine as everywhere else in the app). Filters at the
+top narrow it down by
+Year (which year's Jan–Dec grid to show), Month, Category, Responsible
+Person, and Status. Clicking any bar opens that activity's full detail
+popup (the same one as the Activities page's "View" button).
 
 ### Settings
 
