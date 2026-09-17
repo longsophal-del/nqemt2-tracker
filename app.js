@@ -342,6 +342,7 @@
   var els = {};
   function cacheEls() {
     [
+      "loadingOverlay",
       "sidebar", "sidebarBackdrop", "hamburgerBtn", "mainNav", "routeTitle", "exportBtn", "syncBanner", "sidebarSync",
       "dfYear", "dfMonth", "dfCategory", "dfResponsible", "dfStatus", "dfReset", "exportAllChartsBtn", "kpiGrid",
       "chartMonth", "chartMonthLegend", "chartStatus", "chartCategory", "chartPlannedActual", "chartPlannedActualLegend",
@@ -378,6 +379,20 @@
       return (r && ROUTE_TITLES.hasOwnProperty(r)) ? r : null;
     } catch (e) { return null; }
   }
+
+  // Remembers whether the sidebar is collapsed (desktop/tablet widths only —
+  // on narrow screens the same button just opens/closes the overlay menu,
+  // which never needs to persist). Also best-effort via localStorage.
+  var SIDEBAR_COLLAPSED_KEY = "nqemt2_sidebar_collapsed";
+  function setSidebarCollapsed(collapsed) {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    els.hamburgerBtn.setAttribute("aria-label", collapsed ? "Show menu" : "Hide menu");
+    els.hamburgerBtn.title = collapsed ? "Show menu" : "Hide menu";
+    try { window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) { /* ignore */ }
+  }
+  function loadSidebarCollapsed() {
+    try { return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1"; } catch (e) { return false; }
+  }
   function setRoute(route) {
     state.route = route;
     saveLastRoute(route);
@@ -404,9 +419,16 @@
         setRoute(route);
       });
     });
+    // One button, two jobs depending on screen width: on narrow screens (the
+    // existing behavior) it slides the sidebar in/out as an overlay; on
+    // wider screens it collapses the sidebar to width 0 in place instead, so
+    // wide views like the Schedule Timeline get the full window width. Only
+    // one of the two CSS effects is ever active at a given width, so toggling
+    // both classes together is safe.
     els.hamburgerBtn.addEventListener("click", function () {
       els.sidebar.classList.toggle("open");
       els.sidebarBackdrop.classList.toggle("show");
+      setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
     });
     els.sidebarBackdrop.addEventListener("click", function () {
       els.sidebar.classList.remove("open");
@@ -449,14 +471,20 @@
     var today = todayLocal();
     var infos = list.map(function (d) { return computeDelayInfo(d, today); });
     var total = list.length;
-    var completed = infos.filter(function (i) { return i.code === "completed" || i.code === "completed-delayed"; }).length;
-    var inProgress = list.filter(function (d) { return d.status === "In Progress"; }).length;
-    var upcoming = list.filter(function (d) {
-      var ps = parseDateLocal(d.startDate);
-      return d.status === "Planned" && ps && ps.getTime() > today.getTime();
-    }).length;
-    var delayed = infos.filter(function (i) { return i.code === "completed-delayed"; }).length;
-    var overdue = infos.filter(function (i) { return i.code === "delayed"; }).length;
+    // Every card below reads its count straight off the shared delay engine's
+    // code — the same one Delay Summary, Schedule Timeline, and the
+    // Activities chips use — and each activity lands in exactly ONE of these
+    // five buckets (a finished-late activity counts only under "Delayed",
+    // never also under "Completed"; an overdue-but-still-open activity counts
+    // only under "Overdue", never also under "In progress"). Cancelled and
+    // Rescheduled activities aren't broken out as their own cards here, so
+    // the five numbers won't sum to Total when the filtered list includes
+    // any — that's expected, not a bug.
+    var completed = infos.filter(function (i) { return i.code === "completed"; }).length; // finished, on time
+    var inProgress = infos.filter(function (i) { return i.code === "ontime"; }).length; // started, not yet finished, on schedule
+    var upcoming = infos.filter(function (i) { return i.code === "upcoming"; }).length; // not yet started
+    var delayed = infos.filter(function (i) { return i.code === "completed-delayed"; }).length; // finished, but late
+    var overdue = infos.filter(function (i) { return i.code === "delayed"; }).length; // still open, past its planned end date
 
     var cards = [
       ["Total activities", total, ""],
@@ -520,7 +548,12 @@
       if (m2 < 0 || m2 > 11) return;
       planned[m2]++;
       var info = computeDelayInfo(d, today);
-      if (info.code === "ontime" || info.code === "upcoming" || info.code === "completed") onTime[m2]++;
+      // Strictly "has finished, and finished on time" — an activity that
+      // hasn't started yet (upcoming) or is still running (on time, but not
+      // done) does NOT count here, even though neither is technically late.
+      // This chart is read as a completion-rate view: how many of this
+      // month's planned activities actually finished on schedule.
+      if (info.code === "completed") onTime[m2]++;
     });
     return { planned: planned, onTime: onTime };
   }
@@ -670,7 +703,7 @@
       svg.appendChild(rectP);
       var rectA = svgEl("rect", { x: groupX + barW + gap, y: yA, width: barW, height: Math.max(hA, 0), fill: cssVar("--st-completed"), rx: 2 });
       var titleA = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      titleA.textContent = MONTH_ABBR[m3] + " — On time / completed: " + onTime[m3];
+      titleA.textContent = MONTH_ABBR[m3] + " — Finished on time: " + onTime[m3];
       rectA.appendChild(titleA);
       svg.appendChild(rectA);
       if (planned[m3] > 0) {
@@ -689,7 +722,7 @@
     svg.appendChild(svgEl("line", { x1: padL, x2: padL, y1: padT, y2: padT + plotH, stroke: cssVar("--line"), "stroke-width": 1 }));
     els.chartPlannedActualLegend.innerHTML =
       '<span class="sw"><span class="dot" style="background:' + cssVar("--st-planned") + '"></span>Planned</span>' +
-      '<span class="sw"><span class="dot" style="background:' + cssVar("--st-completed") + '"></span>On time / completed</span>';
+      '<span class="sw"><span class="dot" style="background:' + cssVar("--st-completed") + '"></span>Finished on time</span>';
   }
 
   function renderDashboard() {
@@ -734,7 +767,7 @@
     } else if (svgId === "chartPlannedActual") {
       var pa = computePlannedActualCounts(list);
       var rows4 = MONTH_ABBR.map(function (m, i) { return [m, pa.planned[i], pa.onTime[i]]; });
-      downloadCSV("nqemt2_planned_vs_actual.csv", ["Month", "Planned", "On time / completed"], rows4);
+      downloadCSV("nqemt2_planned_vs_actual.csv", ["Month", "Planned", "Finished on time"], rows4);
     }
   }
 
@@ -1478,7 +1511,6 @@
 
     var rowsHtml = list.map(function (d) {
       var info = computeDelayInfo(d, today);
-      var g = CATEGORY_GROUPS.indexOf(d.categoryGroup) >= 0 ? d.categoryGroup : "Other";
       var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate) || pStart;
       var cs = scheduleClamp(pStart, year, "start"), ce = scheduleClamp(pEnd, year, "end");
       var left = schedulePx(layout, cs, false);
@@ -1533,8 +1565,13 @@
         "\nStatus: " + escapeHtml(d.status) +
         "\nDelay Days: " + (info.delayDays > 0 ? info.delayDays : 0);
 
+      // Unlike the Dashboard/Calendar/Activities views (which color bars and
+      // chips by category so those views can tell categories apart), every
+      // bar on this Schedule Timeline is the same orange regardless of
+      // category — the category is still shown as text under the activity
+      // name in the pinned column and in the tooltip above.
       var plannedBar = '<div class="sch-bar code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
-        'style="left:' + barLeft.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + groupColor(g) + ';" title="' + tip + '">' +
+        'style="left:' + barLeft.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + cssVar("--cat-qiwg") + ';" title="' + tip + '">' +
         (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(budgetDaysLabel) + '</div>';
 
       var actualBar = "";
@@ -1843,6 +1880,7 @@
   function boot() {
     cacheEls();
     wireNav();
+    setSidebarCollapsed(loadSidebarCollapsed());
     wireDashFilters();
     wireChartActions();
     wireActivitiesControls();
@@ -1861,6 +1899,11 @@
       if (years.length) { state.timelineYear = years[years.length - 1]; state.dash.year = String(state.timelineYear); state.sch.year = state.timelineYear; }
       renderAll();
       setRoute(loadLastRoute() || "dashboard");
+      // The activities are in and the first view is rendered — the spinner
+      // shown since the page opened (see the plain HTML/CSS at the top of
+      // index.html) has done its job, whether that took a moment (demo mode)
+      // or however long the live Apps Script fetch took.
+      if (els.loadingOverlay) els.loadingOverlay.classList.add("hide");
     }
 
     if (!usingLiveApi) {

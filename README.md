@@ -106,6 +106,19 @@ remembers whichever page you were last on (in the browser's local storage)
 and reopens it automatically the next time you load or refresh the page,
 instead of always starting back on the Dashboard.
 
+The ☰ button in the top bar now also hides/shows the whole sidebar on
+tablet/desktop widths (not just the phone menu it already opened and closed
+before) — handy for giving the wide Schedule Timeline the full window width.
+Your choice is remembered the same way as the last page, so it stays
+hidden (or shown) the next time you load the page.
+
+The page now shows a loading spinner (with the logo) the moment it opens,
+and keeps it up until the activities are actually ready to show — whether
+that's near-instant (demo mode, from the bundled sample) or however long
+the live Apps Script fetch takes on a slow connection. Before this, the
+page would just sit there with an empty, unfilled Dashboard while data was
+still loading.
+
 ### Dashboard
 
 KPI cards (Total, Completed, In Progress, Upcoming, Delayed, Overdue) and
@@ -116,8 +129,14 @@ Delay Summary — all computed live from whatever the Year / Month / Category
 A note on two KPIs that sound similar: **Delayed** counts activities that
 *finished* late (an actual end date recorded after the planned end).
 **Overdue** counts activities that are *currently* late — the planned end
-date has passed and there's no actual end date yet. Let me know if you'd
-rather these be defined differently.
+date has passed and there's no actual end date yet. All five non-Total
+cards (Completed, In Progress, Upcoming, Delayed, Overdue) now come from
+the same delay engine that drives the Delay Summary and every Delay chip
+elsewhere in the app, and each activity lands in exactly one of them — so,
+unlike before, they never double-count an activity into two cards at once
+(Cancelled and Rescheduled activities simply aren't broken out as their own
+KPI cards, so the five numbers won't always add up to Total if the current
+filters include any).
 
 ### Activities page
 
@@ -226,9 +245,13 @@ year to year. The Activities column stays pinned on the left
 while you scroll sideways through the year, and the header row stays
 pinned while you scroll down through a long activity list.
 
-Each row shows the planned (budget) period as a colored bar (colored by
-category, same as the other charts), with a second, hatched bar underneath
-for the Actual Start/End dates whenever they're recorded and differ from the
+Each row shows the planned (budget) period as an orange bar — unlike the
+Dashboard charts, Activities table, and Calendar/Timeline page (which still
+color-code by category so you can tell categories apart there), every bar
+on this Gantt view is the same color; the category is shown as text under
+the activity name in the pinned column and in the bar's tooltip instead.
+A second, hatched bar underneath shows
+the Actual Start/End dates whenever they're recorded and differ from the
 plan. Instead of the activity name, the bar is labeled with the total
 number of budget days it covers (e.g. "30 Days" — Planned Start through
 Planned End, inclusive). The bar's position and width are the real date

@@ -51,11 +51,33 @@ body{
 }
 h1,h2,h3{font-family:"Fraunces","Iowan Old Style",Georgia,serif; text-wrap:balance; margin:0;}
 
+/* ---------- First-load spinner ---------- */
+/* Shown by default (plain HTML/CSS, no JS needed) so it covers the page
+   immediately, before app.js has even started fetching. app.js hides it
+   once the activities have loaded (from the live Apps Script API, or from
+   the bundled demo sample) by adding the "hide" class, which fades it out. */
+.loading-overlay{
+  position:fixed; inset:0; z-index:200; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:14px;
+  background:var(--paper); color:var(--muted); transition:opacity .25s ease;
+}
+.loading-overlay.hide{opacity:0; pointer-events:none;}
+.loading-logo{width:40px; height:40px; object-fit:contain;}
+.spinner{
+  width:26px; height:26px; border-radius:50%; flex:none;
+  border:3px solid var(--line); border-top-color:var(--accent);
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{ to { transform:rotate(360deg); } }
+.loading-text{font-size:13px;}
+@media (prefers-reduced-motion:reduce){ .spinner{animation:none; border-top-color:var(--line);} }
+
 /* ---------- App shell: sidebar + main content ---------- */
 .shell{display:flex; min-height:100vh; align-items:stretch;}
 .sidebar{
   width:230px; flex:none; background:var(--surface); border-right:1px solid var(--line);
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; z-index:60;
+  transition:width .18s ease, border-color .18s ease;
 }
 .brand{display:flex; align-items:center; gap:10px; padding:18px 16px; border-bottom:1px solid var(--line);}
 .brand-mark{width:32px; height:32px; object-fit:contain; flex:none; display:block;}
@@ -79,11 +101,16 @@ h1,h2,h3{font-family:"Fraunces","Iowan Old Style",Georgia,serif; text-wrap:balan
 }
 .topbar-title{font-family:"Fraunces",serif; font-weight:600; font-size:19px; flex:1;}
 .hamburger{
-  display:none; background:transparent; border:1px solid var(--line); border-radius:8px;
-  width:34px; height:34px; align-items:center; justify-content:center; cursor:pointer; color:var(--ink); font-size:16px;
+  display:inline-flex; background:transparent; border:1px solid var(--line); border-radius:8px;
+  width:34px; height:34px; align-items:center; justify-content:center; cursor:pointer; color:var(--ink); font-size:16px; flex:none;
+}
+/* Desktop/tablet: the same button collapses the sidebar to width 0 in place
+   (no overlay, no backdrop) so the page content — especially the wide
+   Schedule Timeline — can use the full window width. */
+@media (min-width:901px){
+  body.sidebar-collapsed .sidebar{width:0; min-width:0; border-right-color:transparent; overflow:hidden;}
 }
 @media (max-width:900px){
-  .hamburger{display:inline-flex;}
   .sidebar{position:fixed; inset:0 auto 0 0; transform:translateX(-100%); transition:transform .2s;}
   .sidebar.open{transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,.35);}
 }
@@ -307,9 +334,9 @@ footer.note{color:var(--muted); font-size:11.5px; text-align:center; padding-top
 .kpi .l{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
 .kpi.kpi-completed .n{color:var(--st-completed);}
 .kpi.kpi-progress .n{color:var(--st-progress);}
-.kpi.kpi-upcoming .n{color:var(--st-planned);}
+.kpi.kpi-upcoming .n{color:var(--st-upcoming);}
 .kpi.kpi-delayed .n{color:var(--st-delayed);}
-.kpi.kpi-overdue .n{color:var(--cat-meetings);}
+.kpi.kpi-overdue .n{color:var(--st-delayed);}
 
 /* ---------- Dashboard: chart grid ---------- */
 .chart-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}

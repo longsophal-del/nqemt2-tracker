@@ -11,6 +11,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
+<div id="loadingOverlay" class="loading-overlay" role="status" aria-live="polite">
+  <img class="loading-logo" src="logo.png" alt="">
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="loading-text">Loading activities…</div>
+</div>
 <div class="shell">
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
@@ -23,7 +28,7 @@
     </div>
     <nav class="nav" id="mainNav">
       <button class="nav-item" data-route="dashboard">📊 <span>Dashboard</span></button>
-      <!-- <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button> -->
+      <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button>
       <button class="nav-item" data-route="schedule">📅 <span>Schedule Timeline</span></button>
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
