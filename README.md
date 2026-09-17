@@ -101,7 +101,10 @@ the change automatically once committed.
 A left sidebar (collapses to a hamburger menu on phones/narrow screens) with
 **Dashboard**, **Calendar / Timeline**, **Schedule Timeline** (new — a
 separate full-year Gantt view, see below), **Activities**, **Add Activity**,
-**Category**, **Reports** (Phase 2 placeholder), and **Settings**.
+**Category**, **Reports** (Phase 2 placeholder), and **Settings**. The app
+remembers whichever page you were last on (in the browser's local storage)
+and reopens it automatically the next time you load or refresh the page,
+instead of always starting back on the Dashboard.
 
 ### Dashboard
 

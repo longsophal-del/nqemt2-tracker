@@ -363,8 +363,24 @@
   // =========================================================================
   // Router
   // =========================================================================
+  // Remembers which sidebar menu item was last open, so refreshing the page
+  // (or coming back later) reopens the same view instead of always landing
+  // back on the Dashboard. Best-effort only — if the browser blocks storage
+  // (private window, blocked site data), the app just falls back to
+  // Dashboard on load, same as before.
+  var LAST_ROUTE_KEY = "nqemt2_last_route";
+  function saveLastRoute(route) {
+    try { window.localStorage.setItem(LAST_ROUTE_KEY, route); } catch (e) { /* ignore */ }
+  }
+  function loadLastRoute() {
+    try {
+      var r = window.localStorage.getItem(LAST_ROUTE_KEY);
+      return (r && ROUTE_TITLES.hasOwnProperty(r)) ? r : null;
+    } catch (e) { return null; }
+  }
   function setRoute(route) {
     state.route = route;
+    saveLastRoute(route);
     document.querySelectorAll(".view").forEach(function (v) { v.hidden = (v.id !== "view-" + route); });
     document.querySelectorAll(".nav-item").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-route") === route); });
     els.routeTitle.textContent = ROUTE_TITLES[route] || route;
@@ -1844,7 +1860,7 @@
       var years = uniqueSorted(state.docs, function (d) { return d.year; });
       if (years.length) { state.timelineYear = years[years.length - 1]; state.dash.year = String(state.timelineYear); state.sch.year = state.timelineYear; }
       renderAll();
-      setRoute("dashboard");
+      setRoute(loadLastRoute() || "dashboard");
     }
 
     if (!usingLiveApi) {
