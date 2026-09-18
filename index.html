@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NQEMT-2 Activity Management System</title>
-<meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): dashboard, activities, timeline, and reports, backed by Google Sheets.">
+<meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): activity timeline, activities, and reports, backed by Google Sheets.">
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
@@ -27,9 +27,7 @@
       </div>
     </div>
     <nav class="nav" id="mainNav">
-      <button class="nav-item" data-route="dashboard">📊 <span>Dashboard</span></button>
-      <button class="nav-item" data-route="timeline">🗂️ <span>Calendar / Timeline</span></button>
-      <button class="nav-item" data-route="schedule">📅 <span>Schedule Timeline</span></button>
+      <button class="nav-item" data-route="schedule">📅 <span>Activity Timeline</span></button>
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
       <button class="nav-item" data-route="categories">🏷️ <span>Category</span></button>
@@ -42,7 +40,7 @@
   <div class="main">
     <header class="topbar">
       <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
-      <div class="topbar-title" id="routeTitle">Dashboard</div>
+      <div class="topbar-title" id="routeTitle">Activity Timeline</div>
       <div class="topbar-actions">
         <button class="btn" id="exportBtn" hidden title="Download the current filtered list as a CSV file">⬇ Export CSV</button>
       </div>
@@ -51,76 +49,6 @@
     <div id="syncBanner" class="sync-banner" hidden></div>
 
     <main class="content">
-
-      <!-- ============ DASHBOARD ============ -->
-      <section id="view-dashboard" class="view">
-        <div class="filters dash-filters">
-          <select id="dfYear"></select>
-          <select id="dfMonth"><option value="">All months</option></select>
-          <select id="dfCategory"><option value="">All categories</option></select>
-          <select id="dfResponsible"><option value="">All responsible people</option></select>
-          <select id="dfStatus"><option value="">All statuses</option></select>
-          <button class="btn" id="dfReset" title="Clear all dashboard filters">✕ Reset filters</button>
-          <button class="btn btn-primary" id="exportAllChartsBtn" title="Download all four charts as one PDF">📄 All charts as PDF</button>
-        </div>
-
-        <div class="kpi-grid" id="kpiGrid"></div>
-
-        <div class="chart-grid">
-          <section class="chart-card">
-            <div class="chart-card-head">
-              <h2>Activities by month</h2>
-              <div class="chart-actions">
-                <button class="icon-btn" data-chart="chartMonth" data-chart-action="copy" title="Copy chart as image">📋</button>
-                <button class="icon-btn" data-chart="chartMonth" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
-              </div>
-            </div>
-            <div class="hint">Count of activities scheduled each month, split by category.</div>
-            <div class="chart-scroll"><svg id="chartMonth" viewBox="0 0 480 320" role="img" aria-label="Bar chart of activities by month and category"></svg></div>
-            <div class="legend" id="chartMonthLegend"></div>
-          </section>
-          <section class="chart-card">
-            <div class="chart-card-head">
-              <h2>Activities by status</h2>
-              <div class="chart-actions">
-                <button class="icon-btn" data-chart="chartStatus" data-chart-action="copy" title="Copy chart as image">📋</button>
-                <button class="icon-btn" data-chart="chartStatus" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
-              </div>
-            </div>
-            <div class="hint">How many activities currently sit in each status.</div>
-            <div class="chart-scroll"><svg id="chartStatus" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by status"></svg></div>
-          </section>
-          <section class="chart-card">
-            <div class="chart-card-head">
-              <h2>Activities by category</h2>
-              <div class="chart-actions">
-                <button class="icon-btn" data-chart="chartCategory" data-chart-action="copy" title="Copy chart as image">📋</button>
-                <button class="icon-btn" data-chart="chartCategory" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
-              </div>
-            </div>
-            <div class="hint">Count of activities per category.</div>
-            <div class="chart-scroll"><svg id="chartCategory" viewBox="0 0 480 280" role="img" aria-label="Bar chart of activities by category"></svg></div>
-          </section>
-          <section class="chart-card">
-            <div class="chart-card-head">
-              <h2>Planned vs. actual</h2>
-              <div class="chart-actions">
-                <button class="icon-btn" data-chart="chartPlannedActual" data-chart-action="copy" title="Copy chart as image">📋</button>
-                <button class="icon-btn" data-chart="chartPlannedActual" data-chart-action="csv" title="Export chart data (CSV)">⬇</button>
-              </div>
-            </div>
-            <div class="hint">Each month's planned activities vs. how many finished on time.</div>
-            <div class="chart-scroll"><svg id="chartPlannedActual" viewBox="0 0 480 280" role="img" aria-label="Bar chart of planned vs actual activities per month"></svg></div>
-            <div class="legend" id="chartPlannedActualLegend"></div>
-          </section>
-        </div>
-
-        <section class="chart-card">
-          <h2>Delay summary</h2>
-          <div class="hint">Auto-computed from Planned vs. Actual dates across the filtered activities.</div>
-          <div class="delay-summary" id="dashDelaySummary"></div>
-        </section>
-      </section>
 
       <!-- ============ ACTIVITIES ============ -->
       <section id="view-activities" class="view" hidden>
@@ -179,29 +107,12 @@
         </section>
       </section>
 
-      <!-- ============ TIMELINE ============ -->
-      <section id="view-timeline" class="view" hidden>
-        <section id="timelineSection">
-          <div class="chart-head">
-            <div>
-              <h2>Schedule timeline</h2>
-              <div class="hint" id="timelineHint">Day-by-day view for the selected year — click a bar to jump to it in the table below.</div>
-            </div>
-            <div class="year-toggle" id="yearToggle"></div>
-          </div>
-          <div id="timelineBody"></div>
-          <div class="tl-legend legend" id="timelineLegend"></div>
-          <div class="delay-summary" id="delaySummary"></div>
-        </section>
-      </section>
-
-      <!-- ============ SCHEDULE TIMELINE (Gantt) ============ -->
-      <!-- A separate page from Calendar / Timeline above — its own route,
-           its own render functions in app.js, nothing shared or modified. -->
+      <!-- ============ ACTIVITY TIMELINE (Gantt) ============ -->
       <section id="view-schedule" class="view" hidden>
         <section>
-          <h2>Schedule Timeline</h2>
+          <h2>Activity Timeline</h2>
           <div class="hint" id="scheduleHint">Full-year Gantt view — click a bar for activity details.</div>
+          <div class="status-summary" id="scheduleStatusSummary"></div>
           <div class="filters sch-filters">
             <select id="schYear"></select>
             <select id="schMonth"><option value="">All months</option></select>
@@ -212,7 +123,6 @@
           </div>
           <div class="sch-outer" id="scheduleOuter"></div>
           <div class="tl-legend legend" id="scheduleLegend"></div>
-          <div class="delay-summary" id="scheduleDelaySummary"></div>
         </section>
       </section>
 
@@ -242,7 +152,7 @@
               </div>
               <div class="field">
                 <label for="fResponsible">Responsible person</label>
-                <input type="text" id="fResponsible" list="responsibleList" placeholder="e.g. Mr. Long Sophal">
+                <input type="text" id="fResponsible" list="responsibleList">
                 <datalist id="responsibleList"></datalist>
               </div>
               <div class="field">
@@ -280,7 +190,7 @@
               </div>
               <div class="field">
                 <label for="fDelayOverride">Delay override (days, optional)</label>
-                <input type="number" id="fDelayOverride" placeholder="Leave blank to auto-compute from dates">
+                <input type="number" id="fDelayOverride" min="0" step="1" placeholder="e.g. 3">
               </div>
               <div class="field field-wide">
                 <label for="fRemarks">Remarks</label>
