@@ -17,9 +17,11 @@
   --st-planned:#3B6EA5;
   --st-upcoming:#6C7A99;
   --st-delayed:#E5484D;
+  --st-stuck:#5C3A21;
   --st-cancelled:#8A8F87;
   --tl-actual:#2F6FED;
   --delay-override:#9B2C6F;
+  --sch-progress:#1E9E52;
   --shadow: 0 1px 2px rgba(24,43,42,0.06), 0 4px 14px rgba(24,43,42,0.06);
   --sch-current-bg: rgba(14,124,116,0.10);
   --sch-current-bg-strong: rgba(14,124,116,0.20);
@@ -30,8 +32,8 @@
     --accent:#3FBBAE; --accent-ink:#7FDCD1;
     --cat-training:#3FBBAE; --cat-qiwg:#D9A354; --cat-coaching:#7C9BE0; --cat-meetings:#E08469;
     --cat-assessment:#B79BCB; --cat-other:#9AA39A;
-    --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-upcoming:#9AAEDB; --st-delayed:#FF6B6B; --st-cancelled:#9AA39A;
-    --tl-actual:#6EA8FF;
+    --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-upcoming:#9AAEDB; --st-delayed:#FF6B6B; --st-stuck:#C08457; --st-cancelled:#9AA39A;
+    --tl-actual:#6EA8FF; --sch-progress:#4ECB80;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
     --sch-current-bg: rgba(63,187,174,0.16);
     --sch-current-bg-strong: rgba(63,187,174,0.30);
@@ -42,8 +44,8 @@
   --accent:#3FBBAE; --accent-ink:#7FDCD1;
   --cat-training:#3FBBAE; --cat-qiwg:#D9A354; --cat-coaching:#7C9BE0; --cat-meetings:#E08469;
   --cat-assessment:#B79BCB; --cat-other:#9AA39A;
-  --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-upcoming:#9AAEDB; --st-delayed:#FF6B6B; --st-cancelled:#9AA39A;
-  --tl-actual:#6EA8FF;
+  --st-completed:#5FBF7C; --st-progress:#E8B84B; --st-planned:#7CA9E0; --st-upcoming:#9AAEDB; --st-delayed:#FF6B6B; --st-stuck:#C08457; --st-cancelled:#9AA39A;
+  --tl-actual:#6EA8FF; --sch-progress:#4ECB80;
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
   --sch-current-bg: rgba(63,187,174,0.16);
   --sch-current-bg-strong: rgba(63,187,174,0.30);
@@ -236,7 +238,9 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .ds-card.ds-completed .ds-n{color:var(--st-completed);}
 .ds-card.ds-upcoming .ds-n{color:var(--st-upcoming);}
 .ds-card.ds-inprogress .ds-n{color:var(--st-progress);}
+.ds-card.ds-planned .ds-n{color:var(--st-planned);}
 .ds-card.ds-delayed .ds-n{color:var(--st-delayed);}
+.ds-card.ds-stuck .ds-n{color:var(--st-stuck);}
 .ds-card.ds-cancelled .ds-n{color:var(--st-cancelled);}
 
 /* ==========================================================================
@@ -263,37 +267,40 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .sch-chips{display:flex; flex-wrap:wrap; gap:5px; align-items:center;}
 .sch-bar-cell{position:relative; padding:0; border-bottom:1px solid var(--line); height:72px;}
 .sch-bar-track{position:relative; height:100%; background-image:repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent 100%);}
-.sch-bar{
-  position:absolute; top:14px; height:16px; border-radius:5px; cursor:pointer;
-  opacity:.92; display:flex; align-items:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
-  font-size:10px; color:#fff; padding:0 6px; font-weight:500; gap:3px;
-  box-shadow:0 1px 2px rgba(0,0,0,.15); transition:transform .1s, opacity .1s;
-  border:1px solid var(--paper); border-bottom:3px solid transparent;
+/* One activity = one continuous bar made of up to three adjoining
+   segments (see renderScheduleTimeline in app.js): planned (blue),
+   in-progress actual-so-far (green), and delay/stuck (red/brown). Each
+   segment is its own absolutely-positioned element sitting flush against
+   its neighbors, all at the same vertical position, so together they
+   read as a single strip rather than stacked bars. */
+.sch-seg{
+  position:absolute; top:26px; height:20px; cursor:pointer;
+  opacity:.94; box-shadow:0 1px 2px rgba(0,0,0,.15);
+  border-top:1px solid var(--paper); border-bottom:1px solid var(--paper);
+  transition:transform .1s, opacity .1s;
 }
-.sch-bar:hover, .sch-bar:focus-visible{opacity:1; transform:scaleY(1.1); z-index:2;}
-.sch-bar.code-delayed{border-bottom-color:var(--st-delayed);}
-.sch-bar.code-inprogress{border-bottom-color:var(--st-progress);}
-.sch-bar.code-completed{border-bottom-color:var(--st-completed);}
-.sch-bar.code-cancelled{opacity:.45; text-decoration:line-through;}
-.sch-bar-actual{
-  position:absolute; top:37px; height:14px; border-radius:4px; cursor:pointer;
-  opacity:.85; box-shadow:0 1px 2px rgba(0,0,0,.15);
-  background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.4) 0 3px, transparent 3px 7px);
-  border:1px solid var(--paper);
-  display:flex; align-items:center; justify-content:center; overflow:hidden;
-  white-space:nowrap; text-overflow:ellipsis; font-size:9px; font-weight:600;
-  color:#fff; padding:0 5px; text-shadow:0 1px 1px rgba(0,0,0,.35);
+.sch-seg:hover, .sch-seg:focus-visible{opacity:1; transform:scaleY(1.15); z-index:2;}
+.sch-seg-planned:first-child, .sch-seg-progress:first-child{border-left:1px solid var(--paper); border-top-left-radius:5px; border-bottom-left-radius:5px;}
+.sch-seg:last-child{border-right:1px solid var(--paper); border-top-right-radius:5px; border-bottom-right-radius:5px;}
+/* Each segment's day-count label ("5d") is its own floating chip, not
+   nested inside the colored .sch-seg box — centered on the segment via
+   left (set inline, per segment) + transform, but free to overflow past a
+   short segment's own edges instead of being clipped or hidden when there's
+   no room for the text inside the box itself. It carries its own
+   background (set inline, matching its segment's color) rather than
+   relying on the box underneath, so it stays legible even over a segment
+   that's just a sliver (or over the page background once it overflows).
+   Rendered after all the boxes (see renderScheduleTimeline), so labels
+   always sit on top of every segment's color, never hidden underneath a
+   neighboring segment. */
+.sch-seg-label{
+  position:absolute; top:27.5px; height:17px; transform:translateX(-50%);
+  display:flex; align-items:center; justify-content:center; white-space:nowrap;
+  font-size:9.5px; font-weight:700; color:#fff; letter-spacing:.2px;
+  text-shadow:0 1px 1px rgba(0,0,0,.3);
+  border-radius:4px; padding:0 5px; box-shadow:0 1px 2px rgba(0,0,0,.25);
+  pointer-events:none; z-index:3;
 }
-.sch-bar-actual:hover, .sch-bar-actual:focus-visible{opacity:1; z-index:2;}
-.sch-bar-delay{
-  position:absolute; top:55px; height:14px; border-radius:4px; cursor:pointer;
-  opacity:.92; box-shadow:0 1px 2px rgba(0,0,0,.15);
-  background:var(--st-delayed); border:1px solid var(--paper);
-  display:flex; align-items:center; justify-content:center; overflow:hidden;
-  white-space:nowrap; text-overflow:ellipsis; font-size:9px; font-weight:600;
-  color:#fff; padding:0 5px; text-shadow:0 1px 1px rgba(0,0,0,.35);
-}
-.sch-bar-delay:hover, .sch-bar-delay:focus-visible{opacity:1; z-index:2;}
 
 .filters{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
 .filters input[type=search]{
@@ -321,6 +328,7 @@ select.status-select.st-Completed{color:var(--st-completed); border-color:var(--
 select.status-select.st-InProgress{color:var(--st-progress); border-color:var(--st-progress);}
 select.status-select.st-Planned{color:var(--st-planned); border-color:var(--st-planned);}
 select.status-select.st-Delayed{color:var(--st-delayed); border-color:var(--st-delayed);}
+select.status-select.st-Stuck{color:var(--st-stuck); border-color:var(--st-stuck);}
 select.status-select.st-Cancelled{color:var(--st-cancelled); border-color:var(--st-cancelled);}
 input.notes-input, input.date-input{
   border:1px solid transparent; background:transparent; color:var(--ink); border-radius:6px; padding:4px 6px; width:100%; min-width:110px;
@@ -397,7 +405,9 @@ footer.note{color:var(--muted); font-size:11.5px; text-align:center; padding-top
 .delay-chip{font-size:11px; padding:2px 8px; border-radius:20px; font-weight:600; white-space:nowrap; display:inline-block;}
 .delay-chip.dc-upcoming{background:rgba(108,122,153,0.14); color:var(--st-upcoming);}
 .delay-chip.dc-inprogress{background:rgba(201,138,0,0.14); color:var(--st-progress);}
+.delay-chip.dc-planned{background:rgba(59,110,165,0.14); color:var(--st-planned);}
 .delay-chip.dc-delayed{background:rgba(229,72,77,0.14); color:var(--st-delayed);}
+.delay-chip.dc-stuck{background:rgba(92,58,33,0.16); color:var(--st-stuck);}
 .delay-chip.dc-completed{background:rgba(46,125,70,0.14); color:var(--st-completed);}
 .delay-chip.dc-cancelled{background:rgba(138,143,135,0.14); color:var(--st-cancelled);}
 .priority-chip{font-size:10.5px; padding:2px 7px; border-radius:20px; font-weight:600; white-space:nowrap; display:inline-block;}

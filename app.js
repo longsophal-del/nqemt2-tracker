@@ -17,24 +17,24 @@
   // status/delay display — see computeDelayInfo below. It is only ever
   // changed by a user editing the Add/Edit form; nothing here derives or
   // recomputes it from dates.
-  var STATUS_LIST = ["Upcoming", "In Progress", "Completed", "Delayed", "Cancelled"];
+  var STATUS_LIST = ["Planned", "In Progress", "Completed", "Stuck", "Cancelled"];
   var PRIORITY_LIST = ["High", "Medium", "Low"];
   var MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var DAY_MS = 86400000;
   // One entry per STATUS_LIST value (STATUS_TO_CODE below maps a raw Status
   // string to its key here) — display label + color swatch only.
   var DELAY_INFO = {
-    upcoming: { label: "Upcoming", swatch: "--st-upcoming" },
+    planned: { label: "Planned", swatch: "--st-planned" },
     inprogress: { label: "In Progress", swatch: "--st-progress" },
-    delayed: { label: "Delayed", swatch: "--st-delayed" },
+    stuck: { label: "Stuck", swatch: "--st-stuck" },
     completed: { label: "Completed", swatch: "--st-completed" },
     cancelled: { label: "Cancelled", swatch: "--st-cancelled" }
   };
   var STATUS_TO_CODE = {
-    "Upcoming": "upcoming",
+    "Planned": "planned",
     "In Progress": "inprogress",
     "Completed": "completed",
-    "Delayed": "delayed",
+    "Stuck": "stuck",
     "Cancelled": "cancelled"
   };
   var ROUTE_TITLES = {
@@ -88,6 +88,14 @@
     return prettyDate(startS) + " – " + prettyDate(endS);
   }
   function todayLocal() { var t = new Date(); t.setHours(0, 0, 0, 0); return t; }
+  // Formats a Date as a local YYYY-MM-DD string — NOT Date#toISOString(),
+  // which converts to UTC first and can shift the date by a day depending
+  // on the browser's timezone offset.
+  function toISODateLocal(d) {
+    if (!d) return "";
+    var y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+    return y + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  }
   function uniqueSorted(list, fn) {
     var seen = {}, out = [];
     list.forEach(function (d) {
@@ -123,13 +131,22 @@
     d.activity = d.activity || "";
     d.category = d.category || "";
     d.categoryGroup = CATEGORY_GROUPS.indexOf(d.categoryGroup) >= 0 ? d.categoryGroup : categorizeToGroup(d.category);
-    d.status = d.status || "Upcoming";
+    // "Upcoming" was renamed to "Planned", and the "Delayed" status option
+    // was removed (the Activity Timeline's auto-calculated red/brown bar
+    // segment covers that now — see Section 5 of the technical manual).
+    // Any row still carrying one of those old values (e.g. untouched rows
+    // in the live Google Sheet from before this change) is transparently
+    // migrated to "Planned" here, so it displays correctly immediately and
+    // gets written back as "Planned" the next time that activity is saved.
+    if (d.status === "Upcoming" || d.status === "Delayed") d.status = "Planned";
+    d.status = d.status || "Planned";
     d.priority = PRIORITY_LIST.indexOf(d.priority) >= 0 ? d.priority : "Medium";
     d.notes = d.notes || "";
     d.description = d.description || "";
     d.responsiblePerson = d.responsiblePerson || "";
     d.supportingTeam = d.supportingTeam || "";
     d.delayOverrideDays = (d.delayOverrideDays === 0 || d.delayOverrideDays) ? d.delayOverrideDays : "";
+    d.delayEndDate = dateOnly(d.delayEndDate);
     return d;
   }
   function normalizeCategory(raw) {
@@ -146,13 +163,13 @@
   // Returns {code, label, delayDays}. This is driven ENTIRELY by the
   // activity's manually-set Status field (STATUS_TO_CODE above) — it never
   // looks at today's date or the planned/actual date fields, so the
-  // Completed/Upcoming/In Progress/Delayed/Cancelled label shown
-  // in the Activities table, the Activity Timeline, and the Delay Summary
+  // Completed/Planned/In Progress/Stuck/Cancelled label shown
+  // in the Activities table, the Activity Timeline, and the Status Summary
   // only ever changes when a user edits an activity's Status via the
   // Add/Edit form. `delayDays` is always 0 — kept only so existing call
   // sites that read it (and old exported CSVs) keep working.
   function computeDelayInfo(d) {
-    var code = STATUS_TO_CODE[d.status] || "upcoming";
+    var code = STATUS_TO_CODE[d.status] || "planned";
     return { code: code, label: DELAY_INFO[code].label, delayDays: 0 };
   }
 
@@ -280,7 +297,7 @@
       "scheduleHint", "scheduleStatusSummary", "scheduleOuter", "scheduleLegend",
       "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory", "categoryList",
       "fResponsible", "responsibleList", "fSupporting", "supportingList", "fPriority", "fStatus",
-      "fPlannedStart", "fPlannedEnd", "fActualStart", "fActualEnd", "fDelayOverride", "fRemarks",
+      "fPlannedStart", "fPlannedEnd", "fActualStart", "fActualEnd", "fDelayOverride", "fDelayEndDate", "fRemarks",
       "formMsg", "formSubmitBtn", "formCancelBtn",
       "themeToggle", "settingsDataSource", "openSheetBtn", "settingsCount",
       "modalBackdrop", "modalBody"
@@ -370,16 +387,16 @@
     var infos = list.map(function (d) { return computeDelayInfo(d); });
     var total = list.length;
     var completed = infos.filter(function (i) { return i.code === "completed"; }).length;
-    var upcoming = infos.filter(function (i) { return i.code === "upcoming"; }).length;
+    var planned = infos.filter(function (i) { return i.code === "planned"; }).length;
     var inProgress = infos.filter(function (i) { return i.code === "inprogress"; }).length;
-    var delayed = infos.filter(function (i) { return i.code === "delayed"; }).length;
+    var stuck = infos.filter(function (i) { return i.code === "stuck"; }).length;
     var cancelled = infos.filter(function (i) { return i.code === "cancelled"; }).length;
     var cards = [
       ["Total activities", total, ""],
       ["Completed", completed, "completed"],
-      ["Upcoming", upcoming, "upcoming"],
+      ["Planned", planned, "planned"],
       ["In progress", inProgress, "inprogress"],
-      ["Delayed", delayed, "delayed"],
+      ["Stuck", stuck, "stuck"],
       ["Cancelled", cancelled, "cancelled"]
     ];
     targetEl.innerHTML = '<div class="ds-title">Status summary' + (yearLabel ? " — " + escapeHtml(String(yearLabel)) : "") + '</div><div class="ds-grid">' +
@@ -390,19 +407,26 @@
 
   function renderTimelineLegend(targetEl) {
     if (!targetEl) return;
+    // Each activity's bar is now one continuous strip made of up to four
+    // colored segments (left-to-right, chronological) instead of the
+    // earlier separate Planned/Actual/Delay-override bars: Planned (blue),
+    // In Progress actual-so-far (green), auto-calculated Delay (red, once
+    // Planned End has passed and the activity isn't Completed/Cancelled),
+    // and Stuck (brown, frozen once Status is set to Stuck). The Status
+    // chip colors below are separate — they mirror the manually-set
+    // Status field, same as everywhere else in the app.
     var items = [
-      ["Planned period", "solid"],
-      ["Actual period (when different)", "actual"],
-      ["Delay override (manual)", "--st-delayed"],
-      ["Upcoming", "--st-upcoming"],
-      ["In progress", "--st-progress"],
-      ["Delayed ⚠", "--st-delayed"],
-      ["Completed ✓", "--st-completed"],
-      ["Cancelled 🚫", "--st-cancelled"]
+      ["Bar — Planned", "--st-planned"],
+      ["Bar — In progress (actual so far)", "--sch-progress"],
+      ["Bar — Delay (auto, past due)", "--st-delayed"],
+      ["Bar — Stuck", "--st-stuck"],
+      ["Status — Planned", "--st-planned"],
+      ["Status — In Progress", "--st-progress"],
+      ["Status — Stuck", "--st-stuck"],
+      ["Status — Completed ✓", "--st-completed"],
+      ["Status — Cancelled 🚫", "--st-cancelled"]
     ];
     targetEl.innerHTML = items.map(function (it) {
-      if (it[1] === "solid") return '<span class="sw"><span class="dot tl-swatch"></span>' + it[0] + '</span>';
-      if (it[1] === "actual") return '<span class="sw"><span class="dot tl-swatch tl-swatch-actual"></span>' + it[0] + '</span>';
       return '<span class="sw"><span class="dot" style="background:' + cssVar(it[1]) + '"></span>' + it[0] + '</span>';
     }).join("");
   }
@@ -808,12 +832,6 @@
     var rowsHtml = list.map(function (d) {
       var info = computeDelayInfo(d);
       var pStart = parseDateLocal(d.startDate), pEnd = parseDateLocal(d.endDate) || pStart;
-      var cs = scheduleClamp(pStart, year, "start"), ce = scheduleClamp(pEnd, year, "end");
-      var left = schedulePx(layout, cs, false);
-      var right = schedulePx(layout, ce, true);
-
-      var icon = info.code === "delayed" ? "⚠" :
-        info.code === "completed" ? "✓" : info.code === "cancelled" ? "🚫" : "";
       var delayText = info.label;
       // Budget days = the full length of the planned (budget) period, Planned
       // Start through Planned End inclusive — independent of the current
@@ -821,115 +839,105 @@
       // cut off at the edge of the visible year.
       var budgetDays = (pStart && pEnd) ? (diffDays(pEnd, pStart) + 1) : null;
       var budgetDaysLabel = budgetDays != null ? (budgetDays + (budgetDays === 1 ? " Day" : " Days")) : "—";
-      // The bar's position/width is the real date span whenever that's
-      // already enough to hold the label. Only when the true duration is
-      // too narrow to fit "N Days" does the bar grow beyond its true width —
-      // and it grows EQUALLY on both sides, centered on the true midpoint of
-      // the activity's actual date range, so every bar of the same duration
-      // (e.g. every "5 Days" activity) ends up the same width and lines up
-      // consistently on its real dates instead of drifting left or right
-      // depending on how much empty room happened to be nearby. It's only
-      // shifted off-center — just enough, never more — when centering it
-      // would push past its own month's edge, so it still never crosses
-      // into a month the activity doesn't actually occupy. Most bars
-      // (anything that already fits) are completely unaffected: their left
-      // edge still sits exactly at the Planned Start date.
-      var trueWidth = right - left;
-      var minTextWidth = schBarMinWidth(budgetDaysLabel, !!icon);
-      var width = trueWidth, barLeft = left;
-      if (minTextWidth > trueWidth) {
-        var leftColBound = (scheduleColIndex(layout, cs) - 1) * SCH_MONTH_PX;
-        var rightColBound = scheduleColIndex(layout, ce) * SCH_MONTH_PX;
-        var center = (left + right) / 2;
-        width = minTextWidth;
-        barLeft = center - width / 2;
-        if (barLeft < leftColBound) barLeft = leftColBound;
-        if (barLeft + width > rightColBound) barLeft = Math.max(leftColBound, rightColBound - width);
-        // extremely narrow column fallback (label wider than the whole
-        // month): never truncate the label, even if the bar has to overflow
-        // slightly past its own column to show it in full.
-      }
       // Delay override is a manually-typed number (from the "Delay override
       // (days, optional)" field on the Add/Edit form) — never computed from
-      // dates, so it only ever shows what someone actually entered.
+      // dates. It's no longer drawn as its own bar (the auto-calculated
+      // Delay/Stuck segment below supersedes it visually) but is still
+      // saved and still surfaced in the tooltip if present.
       var delayOverride = (d.delayOverrideDays === 0 || d.delayOverrideDays) && String(d.delayOverrideDays).trim() !== "" ? Number(d.delayOverrideDays) : null;
       var hasDelayOverride = delayOverride != null && !isNaN(delayOverride) && delayOverride > 0;
+
+      // ---------------------------------------------------------------
+      // The Activity Timeline draws ONE continuous bar per activity, made
+      // of up to three adjoining, chronologically-ordered segments:
+      //   1. "progress" (green) — the portion already actually worked,
+      //      only while Status is "In Progress" and Actual start is set.
+      //   2. "planned" (blue) — the rest of the Planned Start/End span
+      //      not already covered by the green segment (or the whole span,
+      //      when there's no green segment at all).
+      //   3. "delay" (red, auto-calculated) or "stuck" (brown, frozen) —
+      //      only once today is past Planned End and the activity isn't
+      //      Completed/Cancelled. Red grows every day the page is opened;
+      //      it freezes and turns brown the moment Status is set to
+      //      "Stuck", using Delay end date (defaulting to the day it was
+      //      marked Stuck) as its fixed right edge.
+      // Nothing here changes the Status field itself — same as the old
+      // Planned/Actual/Delay-override bars, this is read-only display.
+      // ---------------------------------------------------------------
+      var aStart = parseDateLocal(d.actualStart), aEnd = parseDateLocal(d.actualEnd);
+      var delayEndPt = parseDateLocal(d.delayEndDate);
+      var isInProgress = d.status === "In Progress";
+      var isStuck = info.code === "stuck";
+      var isTerminal = info.code === "completed" || info.code === "cancelled";
+      var overdue = !!(pEnd && today.getTime() > pEnd.getTime());
+
+      var segRanges = [];
+      var greenEnd = null;
+      if (isInProgress && aStart && pEnd) {
+        var gEnd = aEnd || (today.getTime() < pEnd.getTime() ? today : pEnd);
+        if (gEnd.getTime() < aStart.getTime()) gEnd = aStart;
+        if (gEnd.getTime() > pEnd.getTime()) gEnd = pEnd;
+        segRanges.push({ start: aStart, end: gEnd, cls: "progress" });
+        greenEnd = gEnd;
+      }
+      if (pStart && pEnd) {
+        var blueStart = greenEnd && greenEnd.getTime() > pStart.getTime() ? greenEnd : pStart;
+        if (blueStart.getTime() < pEnd.getTime() || !greenEnd) {
+          segRanges.push({ start: blueStart, end: pEnd, cls: "planned" });
+        }
+      }
+      var overrunNote = "";
+      if (pEnd) {
+        if (isStuck) {
+          var stuckEnd = delayEndPt || today;
+          if (stuckEnd.getTime() < pEnd.getTime()) stuckEnd = pEnd;
+          if (stuckEnd.getTime() > pEnd.getTime()) {
+            segRanges.push({ start: pEnd, end: stuckEnd, cls: "stuck" });
+          }
+          overrunNote = "Stuck — frozen " + (delayEndPt ? "as of " + prettyDate(d.delayEndDate) : "at today");
+        } else if (overdue && !isTerminal) {
+          segRanges.push({ start: pEnd, end: today, cls: "delay" });
+          var overdueDays = diffDays(today, pEnd);
+          overrunNote = "Auto delay: " + overdueDays + (overdueDays === 1 ? " day" : " days") + " past Planned End";
+        }
+      }
 
       var tip = escapeHtml(d.activity) +
         "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
         "\nCategory: " + escapeHtml(d.category || "—") +
         "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) + (budgetDays != null ? " (" + budgetDaysLabel + ")" : "") +
         "\nActual: " + (d.actualStart || d.actualEnd ? (prettyDate(d.actualStart) + " – " + prettyDate(d.actualEnd)) : "—") +
-        (hasDelayOverride ? "\nDelay override: " + delayOverride + (delayOverride === 1 ? " day" : " days") : "") +
+        (overrunNote ? "\n" + overrunNote : "") +
+        (hasDelayOverride ? "\nDelay override (manual): " + delayOverride + (delayOverride === 1 ? " day" : " days") : "") +
         "\nStatus: " + escapeHtml(d.status);
 
-      // Unlike the Activities/Category views (which color bars and chips by
-      // category so those views can tell categories apart), every bar on
-      // this Activity Timeline is the same orange regardless of category —
-      // the category is still shown as text under the activity name in the
-      // pinned column and in the tooltip above.
-      var plannedBar = '<div class="sch-bar code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
-        'style="left:' + barLeft.toFixed(1) + 'px; width:' + width.toFixed(1) + 'px; background-color:' + cssVar("--cat-qiwg") + ';" title="' + tip + '">' +
-        (icon ? '<span class="dly-ico">' + icon + '</span> ' : '') + escapeHtml(budgetDaysLabel) + '</div>';
-
-      var actualBar = "";
-      var aStart = parseDateLocal(d.actualStart), aEnd = parseDateLocal(d.actualEnd);
-      if (aStart || aEnd) {
-        var as = aStart || aEnd, ae = aEnd || aStart;
-        var acs = scheduleClamp(as, year, "start"), ace = scheduleClamp(ae, year, "end");
-        var aLeft = schedulePx(layout, acs, false);
-        var aRight = schedulePx(layout, ace, true);
-        // Same "N Days" label + grow-to-fit-label treatment as the planned
-        // bar above, so the actual bar reads its own real duration instead
-        // of collapsing to a bare sliver when that span is short — an
-        // activity actually done in 5 days shows "5 Days" here just like a
-        // planned 5-day activity does on the bar above it.
-        var actualDays = diffDays(ae, as) + 1;
-        var actualDaysLabel = actualDays + (actualDays === 1 ? " Day" : " Days");
-        var aTrueWidth = aRight - aLeft;
-        // Reuse the planned bar's own hasIcon flag (not whether THIS bar
-        // shows an icon — it never does) so that two bars with the same
-        // "N Days" label always compute the same minimum width and end up
-        // the same size, instead of the icon-less actual bar measuring
-        // narrower than the planned bar it lines up with.
-        var aMinTextWidth = schBarMinWidth(actualDaysLabel, !!icon);
-        var aWidth = aTrueWidth, aBarLeft = aLeft;
-        if (aMinTextWidth > aTrueWidth) {
-          var aLeftColBound = (scheduleColIndex(layout, acs) - 1) * SCH_MONTH_PX;
-          var aRightColBound = scheduleColIndex(layout, ace) * SCH_MONTH_PX;
-          var aCenter = (aLeft + aRight) / 2;
-          aWidth = aMinTextWidth;
-          aBarLeft = aCenter - aWidth / 2;
-          if (aBarLeft < aLeftColBound) aBarLeft = aLeftColBound;
-          if (aBarLeft + aWidth > aRightColBound) aBarLeft = Math.max(aLeftColBound, aRightColBound - aWidth);
-        }
-        actualBar = '<div class="sch-bar-actual code-' + info.code + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
-          'style="left:' + aBarLeft.toFixed(1) + 'px; width:' + aWidth.toFixed(1) + 'px; background-color:' + cssVar("--tl-actual") + ';" title="' + tip + '">' +
-          escapeHtml(actualDaysLabel) + '</div>';
-      }
-
-      // A third, separate bar just for the manually-entered delay override —
-      // it never shows unless that field was actually filled in, and it
-      // never affects the Status field or the Planned/Actual bars above it.
-      // It picks up right where the last visible bar (Actual, or Planned
-      // when there's no Actual) ends, so it reads as "and then N more days
-      // of delay" rather than trying to invent a date range of its own.
-      var delayBar = "";
-      if (hasDelayOverride) {
-        var delayLabel = delayOverride + (delayOverride === 1 ? " Day Delay" : " Days Delay");
-        var hasActualBar = !!(aStart || aEnd);
-        var prevRight = hasActualBar ? (aBarLeft + aWidth) : (barLeft + width);
-        var dBoundCs = hasActualBar ? acs : cs;
-        var dBoundCe = hasActualBar ? ace : ce;
-        var dLeftColBound = (scheduleColIndex(layout, dBoundCs) - 1) * SCH_MONTH_PX;
-        var dRightColBound = scheduleColIndex(layout, dBoundCe) * SCH_MONTH_PX;
-        var dWidth = schBarMinWidth(delayLabel, false);
-        var dLeft = prevRight + 4;
-        if (dLeft + dWidth > dRightColBound) dLeft = Math.max(dLeftColBound, dRightColBound - dWidth);
-        delayBar = '<div class="sch-bar-delay" data-id="' + d.id + '" tabindex="0" role="button" ' +
-          'style="left:' + dLeft.toFixed(1) + 'px; width:' + dWidth.toFixed(1) + 'px;" title="' + tip + '">' +
-          escapeHtml(delayLabel) + '</div>';
-      }
+      var segColorVar = { planned: "--st-planned", progress: "--sch-progress", delay: "--st-delayed", stuck: "--st-stuck" };
+      // Each segment gets its own day-count label ("1d", "5d", …), computed
+      // from its real (unclamped) start/end dates so it's accurate even
+      // when the bar itself is cut off at the edge of the visible year.
+      // The label is always shown — even on a very short (1-2 day) segment
+      // that's just a sliver — by rendering it as its own floating chip
+      // centered on the segment rather than nested inside it, so it's free
+      // to overflow past the segment's own edges instead of being clipped
+      // or hidden when there's no room for it inside the colored box. It
+      // carries the segment's own color as its own background (rather than
+      // relying on the box underneath), so it stays legible even once it's
+      // overflowing onto the plain page background.
+      var boxesHtml = "", labelsHtml = "";
+      segRanges.forEach(function (seg) {
+        var scs = scheduleClamp(seg.start, year, "start"), sce = scheduleClamp(seg.end, year, "end");
+        var sLeft = schedulePx(layout, scs, false);
+        var sRight = schedulePx(layout, sce, true);
+        var sWidth = Math.max(sRight - sLeft, 2.5); // always at least a visible/clickable sliver
+        var segDays = diffDays(seg.end, seg.start) + 1;
+        var segLabel = segDays + "d";
+        var labelCenter = sLeft + sWidth / 2;
+        var segColor = cssVar(segColorVar[seg.cls]);
+        boxesHtml += '<div class="sch-seg sch-seg-' + seg.cls + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
+          'style="left:' + sLeft.toFixed(1) + 'px; width:' + sWidth.toFixed(1) + 'px; background-color:' + segColor + ';" title="' + tip + '"></div>';
+        labelsHtml += '<span class="sch-seg-label" style="left:' + labelCenter.toFixed(1) + 'px; background-color:' + segColor + ';">' + segLabel + '</span>';
+      });
+      var barHtml = boxesHtml + labelsHtml;
 
       return '<tr>' +
         '<td class="sch-activity-cell">' +
@@ -941,7 +949,7 @@
           '</div>' +
         '</td>' +
         '<td class="sch-bar-cell" colspan="12">' +
-          '<div class="sch-bar-track" style="width:' + gridWidth + 'px; background-image:' + trackBgImage + '; background-size:' + trackBgSize + ';">' + plannedBar + actualBar + delayBar + '</div>' +
+          '<div class="sch-bar-track" style="width:' + gridWidth + 'px; background-image:' + trackBgImage + '; background-size:' + trackBgSize + ';">' + barHtml + '</div>' +
         '</td>' +
         '</tr>';
     }).join("");
@@ -958,7 +966,7 @@
         '<tbody>' + rowsHtml + '</tbody>' +
       '</table>';
 
-    els.scheduleOuter.querySelectorAll(".sch-bar, .sch-bar-actual").forEach(function (b) {
+    els.scheduleOuter.querySelectorAll(".sch-seg").forEach(function (b) {
       b.addEventListener("click", function () { viewActivityRow(b.getAttribute("data-id")); });
       b.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); viewActivityRow(b.getAttribute("data-id")); } });
     });
@@ -1028,12 +1036,13 @@
     els.fResponsible.value = d.responsiblePerson || "";
     els.fSupporting.value = d.supportingTeam || "";
     els.fPriority.value = d.priority || "Medium";
-    els.fStatus.value = d.status || "Upcoming";
+    els.fStatus.value = d.status || "Planned";
     els.fPlannedStart.value = d.startDate || "";
     els.fPlannedEnd.value = d.endDate || "";
     els.fActualStart.value = d.actualStart || "";
     els.fActualEnd.value = d.actualEnd || "";
     els.fDelayOverride.value = (d.delayOverrideDays === 0 || d.delayOverrideDays) ? d.delayOverrideDays : "";
+    els.fDelayEndDate.value = d.delayEndDate || "";
     els.fRemarks.value = d.notes || "";
   }
   function editActivityRow(id) {
@@ -1056,7 +1065,7 @@
     if (!d) return;
     resetForm();
     state.duplicating = true;
-    fillForm(Object.assign({}, d, { status: "Upcoming", actualStart: "", actualEnd: "", delayOverrideDays: "" }));
+    fillForm(Object.assign({}, d, { status: "Planned", actualStart: "", actualEnd: "", delayOverrideDays: "", delayEndDate: "" }));
     els.fName.value = (d.activity || "") + " (copy)";
     els.addFormTitle.textContent = "Duplicate activity #" + d.id;
     els.addFormHint.textContent = "Review the details below, then save to create a new activity — the original is untouched.";
@@ -1098,6 +1107,16 @@
       startDate: psRaw, endDate: peRaw, startDay: startDay, endDay: endDay,
       actualStart: asRaw, actualEnd: aeRaw,
       delayOverrideDays: els.fDelayOverride.value.trim() === "" ? "" : Number(els.fDelayOverride.value),
+      // When an activity is marked Stuck and no delay end date was typed in,
+      // default it to today — this is what "freezes" the Activity Timeline's
+      // brown Stuck bar at today's length instead of leaving it open-ended.
+      // Still fully editable afterwards, same as any other date field.
+      delayEndDate: (function () {
+        var typed = dateOnly(els.fDelayEndDate.value);
+        if (typed) return typed;
+        if (els.fStatus.value === "Stuck") return toISODateLocal(todayLocal());
+        return "";
+      })(),
       notes: els.fRemarks.value.trim()
     };
 
