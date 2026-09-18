@@ -25,7 +25,7 @@
  *   id, year, month, monthName, startDate, endDate, startDay, endDay,
  *   activity, description, category, categoryGroup, responsiblePerson,
  *   supportingTeam, priority, status, notes, actualStart, actualEnd,
- *   delayOverrideDays
+ *   delayOverrideDays, delayEndDate
  * Any column this script writes to that doesn't exist yet is silently
  * skipped — add the header first if you want that field to persist.
  *
@@ -59,7 +59,7 @@ const CATEGORIES_SHEET_NAME = 'Categories';
 // Fields the site's inline quick-edit controls are allowed to touch via the
 // legacy {id, field, value} POST shape. Full create/update (below) can write
 // any column that exists in the sheet's header row.
-const EDITABLE_FIELDS = ['status', 'notes', 'actualDate', 'actualStart', 'actualEnd', 'priority', 'responsiblePerson', 'supportingTeam', 'delayOverrideDays'];
+const EDITABLE_FIELDS = ['status', 'notes', 'actualDate', 'actualStart', 'actualEnd', 'priority', 'responsiblePerson', 'supportingTeam', 'delayOverrideDays', 'delayEndDate'];
 
 function doGet(e) {
   const isCategories = e && e.parameter && e.parameter.sheet === 'categories';
@@ -198,7 +198,8 @@ function setupSheet() {
     'id', 'year', 'month', 'monthName', 'startDate', 'endDate',
     'startDay', 'endDay', 'activity', 'description', 'category',
     'categoryGroup', 'responsiblePerson', 'supportingTeam', 'priority',
-    'status', 'notes', 'actualStart', 'actualEnd', 'delayOverrideDays'
+    'status', 'notes', 'actualStart', 'actualEnd', 'delayOverrideDays',
+    'delayEndDate'
   ];
   const ss = SpreadsheetApp.openById(SHEET_ID);
 
