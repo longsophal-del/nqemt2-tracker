@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NQEMT-2 Activity Management System</title>
+<title>Activity Management</title>
 <meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): activity timeline, activities, and reports, backed by Google Sheets.">
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
@@ -11,6 +11,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
+<div id="loginScreen" class="login-screen">
+  <form id="loginForm" class="login-card">
+    <img class="login-logo" src="logo.png" alt="">
+    <div class="login-title">Activity Management</div>
+    <div class="login-sub">Sign in to continue</div>
+    <div class="field">
+      <label for="loginUser">Username</label>
+      <input type="text" id="loginUser" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    </div>
+    <div class="field">
+      <label for="loginPass">Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password" required>
+    </div>
+    <div id="loginMsg" class="form-msg" hidden></div>
+    <button type="submit" class="btn btn-primary login-submit" id="loginSubmitBtn">Log in</button>
+  </form>
+</div>
 <div id="loadingOverlay" class="loading-overlay" role="status" aria-live="polite">
   <img class="loading-logo" src="logo.png" alt="">
   <div class="spinner" aria-hidden="true"></div>
@@ -22,8 +39,7 @@
     <div class="brand">
       <img class="brand-mark" src="logo.png" alt="NQEMT-2 programme logo">
       <div class="brand-text">
-        <div class="brand-title">NQEMT-2</div>
-        <div class="brand-sub">Activity Management</div>
+        <div class="brand-title">Activity Management</div>
       </div>
     </div>
     <nav class="nav" id="mainNav">
@@ -31,7 +47,7 @@
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
       <button class="nav-item" data-route="categories">🏷️ <span>Category</span></button>
-      <!--<button class="nav-item" data-route="reports">📈 <span>Reports</span></button>-->
+      <button class="nav-item" data-route="reports">📈 <span>Reports</span></button>
       <button class="nav-item" data-route="settings">⚙️ <span>Settings</span></button>
     </nav>
     <div class="sidebar-foot" id="sidebarSync">—</div>
@@ -147,8 +163,7 @@
               </div>
               <div class="field">
                 <label for="fCategory">Category *</label>
-                <input type="text" id="fCategory" list="categoryList" required placeholder="e.g. Coaching">
-                <datalist id="categoryList"></datalist>
+                <select id="fCategory" required></select>
               </div>
               <div class="field">
                 <label for="fResponsible">Responsible person</label>
@@ -248,6 +263,13 @@
                 <div class="settings-label">Activity count</div>
                 <div class="hint" id="settingsCount">—</div>
               </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Account</div>
+                <div class="hint" id="settingsAccount">—</div>
+              </div>
+              <button class="btn" id="logoutBtn">Log out</button>
             </div>
           </div>
         </section>

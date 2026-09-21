@@ -81,6 +81,31 @@ h1,h2,h3{font-family:"Fraunces","Iowan Old Style",Georgia,serif; text-wrap:balan
 .loading-text{font-size:13px;}
 @media (prefers-reduced-motion:reduce){ .spinner{animation:none; border-top-color:var(--line);} }
 
+/* ---------- Login screen ---------- */
+/* Shown by default (plain HTML, no JS needed) so it's the first and only
+   thing visible on load — sits above the first-load spinner (z-index 260 vs
+   200) so nothing behind it is reachable until a valid username/password is
+   entered. app.js hides it (adds the "hide" class) once login succeeds, or
+   immediately on load if the browser already has a valid session (see
+   AUTH_KEY in app.js) — only then does boot() run and the spinner take over. */
+.login-screen{
+  position:fixed; inset:0; z-index:260; display:flex;
+  align-items:center; justify-content:center; padding:20px;
+  background:var(--paper); transition:opacity .2s ease;
+}
+.login-screen.hide{opacity:0; pointer-events:none;}
+.login-card{
+  width:100%; max-width:320px; background:var(--surface); border:1px solid var(--line);
+  border-radius:14px; padding:28px 26px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  display:flex; flex-direction:column; gap:14px; align-items:center;
+}
+.login-logo{width:44px; height:44px; object-fit:contain;}
+.login-title{font-family:"Fraunces","Iowan Old Style",Georgia,serif; font-size:20px; font-weight:600; margin-top:-6px;}
+.login-sub{font-size:12.5px; color:var(--muted); margin-top:-10px; margin-bottom:4px;}
+.login-card .field{width:100%;}
+.login-card .form-msg{width:100%; margin-top:0; text-align:center;}
+.login-submit{width:100%; justify-content:center;}
+
 /* ---------- App shell: sidebar + main content ---------- */
 .shell{display:flex; min-height:100vh; align-items:stretch;}
 .sidebar{
@@ -260,7 +285,12 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .sch-month-h{position:sticky; top:0; z-index:3; font-size:12px;}
 .sch-month-h.sch-alt{background:var(--paper-alt, var(--paper));}
 .sch-month-h.sch-month-current{background:var(--sch-current-bg-strong); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent);}
-.sch-activity-cell{position:sticky; left:0; z-index:2; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top;}
+/* z-index 5 — must stay above a bar's day-count label (.sch-seg-label,
+   z-index 3) and its hovered/focused segment (.sch-seg:hover, z-index 2),
+   otherwise scrolling the timeline sideways slides a bar's floating label
+   out past the end of its own column and over this sticky Activities
+   panel instead of being covered by it. */
+.sch-activity-cell{position:sticky; left:0; z-index:5; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top;}
 .sch-name{font-weight:500; font-size:12.5px; margin-bottom:3px; white-space:normal; word-break:break-word;}
 .sch-category{font-size:11px; color:var(--muted); margin-bottom:3px; white-space:normal; word-break:break-word;}
 .sch-dates{font-size:11px; color:var(--muted); margin-bottom:5px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}

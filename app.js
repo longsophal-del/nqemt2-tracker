@@ -174,16 +174,75 @@
   }
 
   // =========================================================================
+  // Login (see loginScreen in index.html and _isAuthorized in Code.gs)
+  // =========================================================================
+  // Session-only (sessionStorage, not localStorage) — closing every tab for
+  // this site requires logging in again. The username/password are kept
+  // alongside the flag (not just a "logged in" boolean) so every live API
+  // call below can carry them, since Code.gs's own _isAuthorized check
+  // needs to see them on every request, not just once at login.
+  var AUTH_KEY = "nqemt2_auth";
+  function isAuthed() {
+    try { return sessionStorage.getItem(AUTH_KEY) === "1"; } catch (e) { return false; }
+  }
+  function setAuthed(u, p) {
+    try {
+      sessionStorage.setItem(AUTH_KEY, "1");
+      sessionStorage.setItem(AUTH_KEY + "_u", u);
+      sessionStorage.setItem(AUTH_KEY + "_p", p);
+    } catch (e) { /* ignore — falls back to asking again next load */ }
+  }
+  function clearAuthed() {
+    try {
+      sessionStorage.removeItem(AUTH_KEY);
+      sessionStorage.removeItem(AUTH_KEY + "_u");
+      sessionStorage.removeItem(AUTH_KEY + "_p");
+    } catch (e) { /* ignore */ }
+  }
+  function authedUser() {
+    try { return sessionStorage.getItem(AUTH_KEY + "_u") || ""; } catch (e) { return ""; }
+  }
+  function checkCredentials(u, p) {
+    return typeof APP_USERS !== "undefined" && Array.isArray(APP_USERS) &&
+      APP_USERS.some(function (acc) { return acc.username === u && acc.password === p; });
+  }
+  // Appends the logged-in username/password to a live API URL as query
+  // params, so Code.gs's _isAuthorized can check them on every request —
+  // not just the front end deciding locally whether to show the app.
+  function withAuth(url) {
+    var u = "", p = "";
+    try { u = sessionStorage.getItem(AUTH_KEY + "_u") || ""; p = sessionStorage.getItem(AUTH_KEY + "_p") || ""; } catch (e) { /* ignore */ }
+    return url + (url.indexOf("?") === -1 ? "?" : "&") + "u=" + encodeURIComponent(u) + "&p=" + encodeURIComponent(p);
+  }
+  // Called whenever a live request comes back "unauthorized" — e.g. the
+  // password was changed on the backend after this browser already had a
+  // session. Drops the stored session and brings the login screen back
+  // (rather than silently falling through to the bundled demo sample, which
+  // would look like data loss instead of what it actually is: a login
+  // that's no longer valid).
+  function forceReLogin() {
+    clearAuthed();
+    var scr = document.getElementById("loginScreen");
+    if (!scr) return;
+    scr.classList.remove("hide");
+    var msg = document.getElementById("loginMsg");
+    if (msg) { msg.hidden = false; msg.className = "form-msg err"; msg.textContent = "Your session is no longer valid — please log in again."; }
+    var passField = document.getElementById("loginPass");
+    if (passField) passField.value = "";
+  }
+
+  // =========================================================================
   // Network / persistence
   // =========================================================================
   var usingLiveApi = typeof API_URL === "string" && API_URL.indexOf("http") === 0;
 
   function apiPost(payload) {
-    return fetch(API_URL, {
+    return fetch(withAuth(API_URL), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids a CORS preflight
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); }).then(function (res) {
+      if (res && res.unauthorized) { forceReLogin(); throw new Error("session expired — please log in again"); }
       if (!res || !res.ok) throw new Error((res && res.error) || "request failed");
       return res;
     });
@@ -295,11 +354,11 @@
       "categoriesTableBody", "categoryCount", "addCategoryBtn",
       "schYear", "schMonth", "schCategory", "schResponsible", "schStatus", "schReset",
       "scheduleHint", "scheduleStatusSummary", "scheduleOuter", "scheduleLegend",
-      "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory", "categoryList",
+      "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory",
       "fResponsible", "responsibleList", "fSupporting", "supportingList", "fPriority", "fStatus",
       "fPlannedStart", "fPlannedEnd", "fActualStart", "fActualEnd", "fDelayOverride", "fDelayEndDate", "fRemarks",
       "formMsg", "formSubmitBtn", "formCancelBtn",
-      "themeToggle", "settingsDataSource", "openSheetBtn", "settingsCount",
+      "themeToggle", "settingsDataSource", "openSheetBtn", "settingsCount", "settingsAccount", "logoutBtn",
       "modalBackdrop", "modalBody"
     ].forEach(function (id) { els[id] = document.getElementById(id); });
   }
@@ -935,7 +994,12 @@
         var segColor = cssVar(segColorVar[seg.cls]);
         boxesHtml += '<div class="sch-seg sch-seg-' + seg.cls + '" data-id="' + d.id + '" tabindex="0" role="button" ' +
           'style="left:' + sLeft.toFixed(1) + 'px; width:' + sWidth.toFixed(1) + 'px; background-color:' + segColor + ';" title="' + tip + '"></div>';
-        labelsHtml += '<span class="sch-seg-label" style="left:' + labelCenter.toFixed(1) + 'px; background-color:' + segColor + ';">' + segLabel + '</span>';
+        // data-seg-left/right record this segment's own box bounds (in the
+        // same track-relative px as `left` above) so repositionScheduleLabels()
+        // can re-clamp the label into whatever portion of the bar is
+        // actually scrolled into view — see that function for why.
+        labelsHtml += '<span class="sch-seg-label" data-seg-left="' + sLeft.toFixed(1) + '" data-seg-right="' + sRight.toFixed(1) + '" ' +
+          'style="left:' + labelCenter.toFixed(1) + 'px; background-color:' + segColor + ';">' + segLabel + '</span>';
       });
       var barHtml = boxesHtml + labelsHtml;
 
@@ -973,6 +1037,58 @@
 
     renderTimelineLegend(els.scheduleLegend);
     renderStatusSummary(list, els.scheduleStatusSummary, String(year));
+    repositionScheduleLabels();
+  }
+
+  // A day-count label ("90d") is centered on its segment's own full span by
+  // default (see labelCenter above). For a long segment that starts well
+  // before the currently scrolled-into-view months (e.g. a 90-day Planned
+  // bar that started in January while the timeline is scrolled to show
+  // March onward), that true center can land underneath — or right at the
+  // edge of — the sticky Activities column on the left, since only the
+  // segment's box position is fixed; scrolling doesn't move it back into
+  // view. This keeps every visible label pinned within whatever portion of
+  // its own bar is actually on-screen right now (never past its own
+  // segment's edges, and never under the sticky column), the same "sticky
+  // label" behavior seen in most Gantt/chart tools. Purely cosmetic — it
+  // only ever adjusts a label's inline `left`/opacity, never the
+  // underlying `.sch-seg` box, so click targets and tooltips are unaffected.
+  function repositionScheduleLabels() {
+    var outer = els.scheduleOuter;
+    var stickyEl = outer.querySelector(".sch-activity-cell");
+    var stickyW = stickyEl ? stickyEl.getBoundingClientRect().width : 0;
+    var scrollLeft = outer.scrollLeft;
+    // The sticky Activities column keeps a fixed screen position as the
+    // table scrolls, but it still occupies its own (unscrolled) space in
+    // the table's own coordinate system — the same one `outer.scrollLeft`
+    // and every segment's data-seg-left/right (track-relative px) share.
+    // In that shared coordinate space, a track position is hidden behind
+    // the sticky column exactly when it's less than `scrollLeft` (no extra
+    // offset needed — verified empirically, not just derived). The
+    // viewport's far edge, however, DOES need `stickyW` subtracted: the
+    // sticky column eats into the visible width available for the track
+    // on screen, so the right-hand boundary sits `stickyW` short of
+    // `scrollLeft + outer.clientWidth`.
+    var viewportRight = scrollLeft + outer.clientWidth - stickyW;
+    outer.querySelectorAll(".sch-seg-label").forEach(function (label) {
+      var segLeft = parseFloat(label.getAttribute("data-seg-left"));
+      var segRight = parseFloat(label.getAttribute("data-seg-right"));
+      if (isNaN(segLeft) || isNaN(segRight)) return;
+      var visibleLeft = Math.max(segLeft, scrollLeft);
+      var visibleRight = Math.min(segRight, viewportRight);
+      if (visibleRight - visibleLeft <= 4) {
+        // Less than a sliver of this bar is actually on screen right now —
+        // hide the label rather than let it crowd the sticky column's edge.
+        label.style.opacity = "0";
+        return;
+      }
+      var half = (label.offsetWidth || 20) / 2;
+      var center = (visibleLeft + visibleRight) / 2;
+      var minCenter = segLeft + half, maxCenter = segRight - half;
+      center = minCenter <= maxCenter ? Math.max(minCenter, Math.min(maxCenter, center)) : (segLeft + segRight) / 2;
+      label.style.left = center.toFixed(1) + "px";
+      label.style.opacity = "1";
+    });
   }
 
   function wireScheduleFilters() {
@@ -995,6 +1111,19 @@
       populateScheduleFilterOptions();
       renderScheduleTimeline();
     });
+    // Keep each bar's day-count label pinned to whatever part of it is
+    // currently scrolled into view (see repositionScheduleLabels) — wired
+    // once here rather than in renderScheduleTimeline, which reruns on
+    // every filter change and would otherwise pile up duplicate listeners.
+    var scheduleScrollPending = false;
+    els.scheduleOuter.addEventListener("scroll", function () {
+      if (scheduleScrollPending) return;
+      scheduleScrollPending = true;
+      window.requestAnimationFrame(function () {
+        scheduleScrollPending = false;
+        repositionScheduleLabels();
+      });
+    });
   }
 
   // =========================================================================
@@ -1003,11 +1132,21 @@
   function populateFormStaticOptions() {
     els.fStatus.innerHTML = STATUS_LIST.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
   }
-  function populateFormDatalists() {
+  // Category is a strict dropdown sourced from the Category management
+  // table (state.categories) — no more free-typed categories. If the
+  // activity being edited/duplicated carries a category no longer in that
+  // table (renamed or deleted since), pass it as explicitCategory so it's
+  // kept as a selectable option rather than silently dropped; otherwise
+  // (no arg) the current selection is read off the field itself and
+  // preserved across a rebuild, e.g. when setRoute("add") calls this again.
+  function populateFormDatalists(explicitCategory) {
+    var currentCat = (explicitCategory !== undefined) ? (explicitCategory || "") : (els.fCategory.value || "");
     var catNames = uniqueSorted(state.categories, function (c) { return c.name; });
-    uniqueSorted(state.docs, function (d) { return d.category; }).forEach(function (c) { if (catNames.indexOf(c) === -1) catNames.push(c); });
+    if (currentCat && catNames.indexOf(currentCat) === -1) catNames.push(currentCat);
     catNames.sort();
-    els.categoryList.innerHTML = catNames.map(function (c) { return '<option value="' + escapeHtml(c) + '">'; }).join("");
+    els.fCategory.innerHTML = '<option value="">Select a category…</option>' +
+      catNames.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join("");
+    els.fCategory.value = currentCat;
     els.responsibleList.innerHTML = uniqueSorted(state.docs, function (d) { return d.responsiblePerson; }).map(function (p) { return '<option value="' + escapeHtml(p) + '">'; }).join("");
     els.supportingList.innerHTML = uniqueSorted(state.docs, function (d) { return d.supportingTeam; }).map(function (p) { return '<option value="' + escapeHtml(p) + '">'; }).join("");
   }
@@ -1053,11 +1192,11 @@
     els.idField.hidden = false;
     els.fId.value = d.id;
     fillForm(d);
+    populateFormDatalists(d.category);
     els.addFormTitle.textContent = "Edit activity #" + d.id;
     els.addFormHint.textContent = "Editing an existing activity — changes save back to the Google Sheet.";
     els.formSubmitBtn.textContent = "Save changes";
     els.formCancelBtn.hidden = false;
-    populateFormDatalists();
     setRoute("add");
   }
   function duplicateActivityRow(id) {
@@ -1066,10 +1205,10 @@
     resetForm();
     state.duplicating = true;
     fillForm(Object.assign({}, d, { status: "Planned", actualStart: "", actualEnd: "", delayOverrideDays: "", delayEndDate: "" }));
+    populateFormDatalists(d.category);
     els.fName.value = (d.activity || "") + " (copy)";
     els.addFormTitle.textContent = "Duplicate activity #" + d.id;
     els.addFormHint.textContent = "Review the details below, then save to create a new activity — the original is untouched.";
-    populateFormDatalists();
     setRoute("add");
   }
   function cancelEdit() { resetForm(); setRoute("activities"); }
@@ -1098,7 +1237,13 @@
       activity: name,
       description: els.fDescription.value.trim(),
       category: category,
-      categoryGroup: categorizeToGroup(category),
+      // Prefer the group already set on this category in the Category table
+      // (now that Category is a strict dropdown, it normally exists there);
+      // fall back to the keyword heuristic only for a legacy/orphaned value.
+      categoryGroup: (function () {
+        var found = state.categories.find(function (c) { return c.name === category; });
+        return (found && found.group) ? found.group : categorizeToGroup(category);
+      })(),
       responsiblePerson: els.fResponsible.value.trim(),
       supportingTeam: els.fSupporting.value.trim(),
       priority: els.fPriority.value,
@@ -1205,12 +1350,22 @@
     var saved = "system";
     try { saved = localStorage.getItem("nqemt2-theme") || "system"; } catch (e) { /* ignore */ }
     applyTheme(saved);
+    if (els.logoutBtn) {
+      els.logoutBtn.addEventListener("click", function () {
+        clearAuthed();
+        window.location.reload();
+      });
+    }
   }
   function renderSettings() {
     els.settingsDataSource.textContent = usingLiveApi ? "Connected to your Google Sheet via Apps Script." : "Running in demo mode on a bundled sample — set API_URL in config.js to go live.";
     els.settingsCount.textContent = state.docs.length + " activities loaded.";
     if (typeof SHEET_URL === "string" && SHEET_URL.indexOf("http") === 0) els.openSheetBtn.href = SHEET_URL;
     else els.openSheetBtn.hidden = true;
+    if (els.settingsAccount) {
+      var u = authedUser();
+      els.settingsAccount.textContent = u ? ("Logged in as " + u + ".") : "—";
+    }
   }
 
   // =========================================================================
@@ -1227,14 +1382,22 @@
   }
 
   function fetchLiveCategories() {
-    var url = API_URL + (API_URL.indexOf("?") === -1 ? "?" : "&") + "sheet=categories";
+    var url = withAuth(API_URL) + "&sheet=categories";
     return fetch(url)
       .then(function (r) { return r.json(); })
-      .then(function (res) { return (res && res.ok && Array.isArray(res.categories)) ? res.categories : []; })
+      .then(function (res) {
+        if (res && res.unauthorized) { forceReLogin(); return []; }
+        return (res && res.ok && Array.isArray(res.categories)) ? res.categories : [];
+      })
       .catch(function () { return []; }); // best-effort — an older deployment or missing tab just starts with no categories
   }
 
-  function boot() {
+  // One-time UI wiring — guarded so it's safe to call again (see boot()
+  // below) after a forced re-login without double-attaching every listener.
+  var _wired = false;
+  function wireAppOnce() {
+    if (_wired) return;
+    _wired = true;
     cacheEls();
     wireNav();
     setSidebarCollapsed(loadSidebarCollapsed());
@@ -1246,40 +1409,94 @@
     populateFormStaticOptions();
     els.activityForm.addEventListener("submit", handleFormSubmit);
     els.formCancelBtn.addEventListener("click", cancelEdit);
+  }
 
-    function finishBoot(docs, cats) {
-      state.docs = docs.map(normalizeDoc);
-      state.categories = (cats || []).map(normalizeCategory);
-      var years = uniqueSorted(state.docs, function (d) { return d.year; });
-      if (years.length) { state.sch.year = years[years.length - 1]; }
-      renderAll();
-      setRoute(loadLastRoute() || "schedule");
-      // The activities are in and the first view is rendered — the spinner
-      // shown since the page opened (see the plain HTML/CSS at the top of
-      // index.html) has done its job, whether that took a moment (demo mode)
-      // or however long the live Apps Script fetch took.
-      if (els.loadingOverlay) els.loadingOverlay.classList.add("hide");
-    }
+  function finishBoot(docs, cats) {
+    state.docs = docs.map(normalizeDoc);
+    state.categories = (cats || []).map(normalizeCategory);
+    var years = uniqueSorted(state.docs, function (d) { return d.year; });
+    if (years.length) { state.sch.year = years[years.length - 1]; }
+    renderAll();
+    setRoute(loadLastRoute() || "schedule");
+    // The activities are in and the first view is rendered — the spinner
+    // shown since the page opened (see the plain HTML/CSS at the top of
+    // index.html) has done its job, whether that took a moment (demo mode)
+    // or however long the live Apps Script fetch took.
+    if (els.loadingOverlay) els.loadingOverlay.classList.add("hide");
+  }
 
+  // Loads the activities/categories (live or demo) and renders the first
+  // view. Split out from wireAppOnce() so a forced re-login (see
+  // forceReLogin, called when Code.gs rejects a stale session) can reload
+  // data without re-wiring every control on the page a second time.
+  function loadData() {
     if (!usingLiveApi) {
       els.syncBanner.hidden = false;
       els.syncBanner.textContent = "Running in demo mode on a bundled sample — edits won't be saved. Set API_URL in config.js to your deployed Apps Script URL to go live.";
       finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)), typeof SAMPLE_CATEGORIES !== "undefined" ? JSON.parse(JSON.stringify(SAMPLE_CATEGORIES)) : []);
       return;
     }
-    fetch(API_URL)
+    fetch(withAuth(API_URL))
       .then(function (r) { return r.json(); })
       .then(function (res) {
+        if (res && res.unauthorized) { forceReLogin(); throw new Error("__unauthorized__"); }
         if (!res || !res.ok || !Array.isArray(res.activities)) throw new Error("bad response");
         els.syncBanner.hidden = true;
         return fetchLiveCategories().then(function (cats) { finishBoot(res.activities, cats); });
       })
       .catch(function (err) {
+        // forceReLogin() already put the login screen back up for this case
+        // — falling through to the "couldn't reach the API" banner and the
+        // bundled sample underneath it would just be confusing noise.
+        if (err && err.message === "__unauthorized__") return;
         els.syncBanner.hidden = false;
         els.syncBanner.textContent = "Couldn't reach the Apps Script API (" + err.message + "). Showing the bundled sample instead.";
         finishBoot(JSON.parse(JSON.stringify(SAMPLE_ACTIVITIES)), typeof SAMPLE_CATEGORIES !== "undefined" ? JSON.parse(JSON.stringify(SAMPLE_CATEGORIES)) : []);
       });
   }
 
-  boot();
+  function boot() {
+    wireAppOnce();
+    loadData();
+  }
+
+  // =========================================================================
+  // Login gate — the very first thing that runs. Nothing above this point
+  // touches the DOM, so it's safe for boot() to stay unreached until a
+  // valid username/password is entered (or a valid session already exists).
+  // =========================================================================
+  (function initLogin() {
+    var loginScreen = document.getElementById("loginScreen");
+    var loginForm = document.getElementById("loginForm");
+    var loginUser = document.getElementById("loginUser");
+    var loginPass = document.getElementById("loginPass");
+    var loginMsg = document.getElementById("loginMsg");
+
+    function enterApp() {
+      if (loginScreen) loginScreen.classList.add("hide");
+      boot(); // idempotent — wireAppOnce() no-ops if already wired
+    }
+
+    if (isAuthed()) { enterApp(); return; }
+    if (!loginForm) { boot(); return; } // markup missing somehow — fail open rather than dead-end the page
+
+    loginForm.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var u = loginUser.value.trim(), p = loginPass.value;
+      if (checkCredentials(u, p)) {
+        setAuthed(u, p);
+        if (loginMsg) loginMsg.hidden = true;
+        enterApp();
+      } else {
+        if (loginMsg) {
+          loginMsg.hidden = false;
+          loginMsg.className = "form-msg err";
+          loginMsg.textContent = "Incorrect username or password.";
+        }
+        loginPass.value = "";
+        loginPass.focus();
+      }
+    });
+    loginUser.focus();
+  })();
 })();
