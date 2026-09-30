@@ -13,12 +13,16 @@
  * 4. Confirm SHEET_NAME below matches the tab name at the bottom of the
  *    spreadsheet (it's usually "Sheet1" for a sheet created from a CSV
  *    import — rename either the tab or this constant so they match).
- * 5. Deploy > New deployment > select type "Web app".
+ * 5. Edit the APP_USERS map below to your own username/password pairs, and
+ *    copy the SAME pairs into the APP_USERS list in config.js on the static
+ *    site — the site's login screen and this script's own check must agree,
+ *    or every request will be rejected as Unauthorized.
+ * 6. Deploy > New deployment > select type "Web app".
  *      - Execute as: Me
  *      - Who has access: Anyone
- * 6. Copy the deployment's "Web app URL" (ends in /exec) into config.js
+ * 7. Copy the deployment's "Web app URL" (ends in /exec) into config.js
  *    as API_URL in the static site.
- * 7. Re-deploy (Deploy > Manage deployments > edit > new version) any time
+ * 8. Re-deploy (Deploy > Manage deployments > edit > new version) any time
  *    you change this file — editing alone does not update a live deployment.
  *
  * SHEET COLUMNS (header row, any order — the script reads columns by name)
@@ -35,13 +39,26 @@
  * generic way as the Activities tab, selected via a "sheet":"categories"
  * flag on each request instead of a different endpoint.
  *
+ * A third tab, "SubActivities" (see SUBACTIVITIES_SHEET_NAME below), backs
+ * the Activity Timeline's optional Main Activity + Sub-activities (phases)
+ * feature. Each phase now tracks the same Planned/Actual/Status/Delay
+ * fields as a Main Activity. Add a tab with that name and a header row of
+ * `id, activityId, name, startDate, endDate, actualStart, actualEnd,
+ * status, delayEndDate, order` — selected the same
+ * generic way via a "sheet":"subactivities" flag. Each row is one named
+ * phase (e.g. Tender, Design, Construction, Reporting) belonging to one
+ * activity (activityId matches that activity's own id in Sheet1). An
+ * activity with no rows here just keeps showing its existing automatic
+ * Planned/In Progress/Delay bar — this is purely additive.
+ *
  * SETUP HELPERS
- * Don't want to add the columns/tab above by hand? After pasting this file
+ * Don't want to add the columns/tabs above by hand? After pasting this file
  * in, pick "setupSheet" from the function dropdown at the top of the Apps
  * Script editor (next to "Debug") and click "Run". It adds any missing
- * Activities headers and creates the Categories tab if needed — it never
- * touches or removes existing data, and is safe to run more than once.
- * The first run will ask you to authorize the script (same as deploying).
+ * Activities headers and creates the Categories and SubActivities tabs if
+ * needed — it never touches or removes existing data, and is safe to run
+ * more than once. The first run will ask you to authorize the script (same
+ * as deploying).
  *
  * The Categories tab starts out empty — that's normal, not a bug — the
  * Category page will show "0 categories" until it has rows. Once
@@ -56,18 +73,55 @@
 const SHEET_ID = '1OSKJYMr4HOmDbWK04OQKHn2ojbnBLpUtKmlzSANwAks'; // NQEMT-2 Activities
 const SHEET_NAME = 'Sheet1';
 const CATEGORIES_SHEET_NAME = 'Categories';
+const SUBACTIVITIES_SHEET_NAME = 'SubActivities';
+
+// Maps the "sheet" request parameter/body-field to the actual tab name and
+// the JSON key its rows are returned/expected under. Add an entry here (and
+// a matching tab) to expose another generic sheet the same way, without
+// touching doGet/doPost themselves.
+const SHEET_ROUTES = {
+  'categories': { tab: CATEGORIES_SHEET_NAME, listKey: 'categories', resultKey: 'category' },
+  'subactivities': { tab: SUBACTIVITIES_SHEET_NAME, listKey: 'subActivities', resultKey: 'subActivity' }
+};
+function _routeFor(sheetParam) {
+  return SHEET_ROUTES.hasOwnProperty(sheetParam)
+    ? SHEET_ROUTES[sheetParam]
+    : { tab: SHEET_NAME, listKey: 'activities', resultKey: 'activity' };
+}
 // Fields the site's inline quick-edit controls are allowed to touch via the
 // legacy {id, field, value} POST shape. Full create/update (below) can write
 // any column that exists in the sheet's header row.
 const EDITABLE_FIELDS = ['status', 'notes', 'actualDate', 'actualStart', 'actualEnd', 'priority', 'responsiblePerson', 'supportingTeam', 'delayOverrideDays', 'delayEndDate'];
 
+// Login accounts for the site's login screen — must have the exact same
+// username/password pairs as the APP_USERS list in config.js (the two are
+// kept in sync by hand; there's no shared source of truth between a static
+// site and this script). This is what actually protects your data: even
+// someone who finds this Web app's /exec URL directly (e.g. from the site's
+// page source) gets rejected here unless they also have a valid username
+// and password. It is NOT strong security — the values below live in this
+// script's plain-text source, and anyone with edit access to this Apps
+// Script project (or who guesses/leaks a password) can read or bypass it —
+// but it does stop casual/opportunistic access by people who merely find
+// the site's link.
+const APP_USERS = {
+  'admin': 'admin2026'
+};
+function _isAuthorized(e) {
+  const u = e && e.parameter && e.parameter.u;
+  const p = e && e.parameter && e.parameter.p;
+  if (!u) return false;
+  return APP_USERS.hasOwnProperty(u) && APP_USERS[u] === p;
+}
+
 function doGet(e) {
-  const isCategories = e && e.parameter && e.parameter.sheet === 'categories';
-  const sheet = _sheet(isCategories ? CATEGORIES_SHEET_NAME : SHEET_NAME);
+  if (!_isAuthorized(e)) return _json({ ok: false, error: 'Unauthorized', unauthorized: true });
+  const route = _routeFor(e && e.parameter && e.parameter.sheet);
+  const sheet = _sheet(route.tab);
   if (!sheet) {
-    return _json(isCategories
-      ? { ok: false, error: '"' + CATEGORIES_SHEET_NAME + '" tab not found — add it to the Sheet first.', categories: [] }
-      : { ok: false, error: '"' + SHEET_NAME + '" tab not found.', activities: [] });
+    const res = { ok: false, error: '"' + route.tab + '" tab not found' + (route.tab === SHEET_NAME ? '.' : ' — add it to the Sheet first.') };
+    res[route.listKey] = [];
+    return _json(res);
   }
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -78,10 +132,13 @@ function doGet(e) {
       headers.forEach(function (h, i) { obj[h] = row[i]; });
       return obj;
     });
-  return isCategories ? _json({ ok: true, categories: rows }) : _json({ ok: true, activities: rows });
+  const res = { ok: true };
+  res[route.listKey] = rows;
+  return _json(res);
 }
 
 function doPost(e) {
+  if (!_isAuthorized(e)) return _json({ ok: false, error: 'Unauthorized', unauthorized: true });
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -90,11 +147,11 @@ function doPost(e) {
     }
     const body = JSON.parse(e.postData.contents);
     const action = body.action || 'updateField';
-    const isCategories = body.sheet === 'categories';
-    const resultKey = isCategories ? 'category' : 'activity';
-    const sheet = _sheet(isCategories ? CATEGORIES_SHEET_NAME : SHEET_NAME);
+    const route = _routeFor(body.sheet);
+    const resultKey = route.resultKey;
+    const sheet = _sheet(route.tab);
     if (!sheet) {
-      return _json({ ok: false, error: '"' + (isCategories ? CATEGORIES_SHEET_NAME : SHEET_NAME) + '" tab not found — add it to the Sheet first.' });
+      return _json({ ok: false, error: '"' + route.tab + '" tab not found — add it to the Sheet first.' });
     }
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
@@ -227,10 +284,27 @@ function setupSheet() {
     }
   }
 
+  const SUBACT_HEADERS = ['id', 'activityId', 'name', 'startDate', 'endDate', 'actualStart', 'actualEnd', 'status', 'delayEndDate', 'order'];
+  let subSheet = ss.getSheetByName(SUBACTIVITIES_SHEET_NAME);
+  let subActivitiesCreated = false;
+  if (!subSheet) {
+    subSheet = ss.insertSheet(SUBACTIVITIES_SHEET_NAME);
+    subSheet.getRange(1, 1, 1, SUBACT_HEADERS.length).setValues([SUBACT_HEADERS]);
+    subActivitiesCreated = true;
+  } else {
+    const subLastCol = subSheet.getLastColumn();
+    const subExisting = subLastCol > 0 ? subSheet.getRange(1, 1, 1, subLastCol).getValues()[0] : [];
+    const missingSubHeaders = SUBACT_HEADERS.filter(function (h) { return subExisting.indexOf(h) === -1; });
+    if (missingSubHeaders.length) {
+      subSheet.getRange(1, subLastCol + 1, 1, missingSubHeaders.length).setValues([missingSubHeaders]);
+    }
+  }
+
   Logger.log(
     'Setup complete.\nActivities headers added: ' +
     (missingActivityHeaders.length ? missingActivityHeaders.join(', ') : '(none needed, already present)') +
-    '.\nCategories tab: ' + (categoriesCreated ? 'created new' : 'already existed, checked headers') + '.'
+    '.\nCategories tab: ' + (categoriesCreated ? 'created new' : 'already existed, checked headers') +
+    '.\nSubActivities tab: ' + (subActivitiesCreated ? 'created new' : 'already existed, checked headers') + '.'
   );
 }
 
