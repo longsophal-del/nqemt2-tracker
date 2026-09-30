@@ -215,6 +215,12 @@
                 <label for="fRemarks">Remarks</label>
                 <textarea id="fRemarks" rows="2" placeholder="Optional notes"></textarea>
               </div>
+              <div class="field field-wide">
+                <label>Sub-activities / phases (optional)</label>
+                <div class="hint" style="margin:2px 0 8px;">Break this Main Activity into named phases — e.g. Tender, Design, Construction, Reporting — each with its own Planned Start/End, Actual Start/End, and Status, tracked and colored (Planned/In Progress/Delay/Stuck) exactly like a Main Activity. On the Activity Timeline each phase is drawn as its own row, right under this activity. Leave empty to keep the single automatic Planned/Actual bar instead.</div>
+                <div id="subActivityRows" class="subact-rows"></div>
+                <button type="button" class="btn" id="addSubActivityBtn">+ Add phase</button>
+              </div>
             </div>
             <div id="formMsg" class="form-msg" hidden></div>
             <div class="form-actions">
