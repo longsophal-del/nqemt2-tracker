@@ -281,25 +281,46 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .sch-outer{overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px;}
 .sch-table{border-collapse:separate; border-spacing:0; width:max-content;}
 .sch-table th{font-size:11px; font-weight:600; color:var(--muted); background:var(--paper); padding:6px 4px; text-align:center; border-bottom:1px solid var(--line); border-left:1px solid var(--line); white-space:nowrap;}
-.sch-corner{position:sticky; left:0; top:0; z-index:6; background:var(--surface); text-align:left; padding:8px 12px; min-width:220px; max-width:260px; border-left:none;}
+/* transform:translateZ(0) (plus will-change) forces each sticky header/
+   column cell onto its own GPU compositor layer. Without it, some browsers
+   (seen in Chromium during a fast trackpad/wheel scroll) can paint a stale
+   frame of the sticky cell while an absolutely-positioned bar segment or
+   label from a body row — which scrolls on the main thread — has already
+   moved to its new position, so for a frame or two the body content
+   visually "shows through" on top of the sticky header/column before the
+   compositor catches up. Promoting the sticky cells to their own layer
+   keeps them repainted in the same pass as the rest of the page, which
+   eliminates that flash. z-index ordering above (5/6 vs. the bar segment/
+   label's 1-3) still governs the STEADY-STATE stacking; this only fixes
+   the DURING-SCROLL transient. */
+.sch-corner{position:sticky; left:0; top:0; z-index:6; background:var(--surface); text-align:left; padding:8px 12px; min-width:220px; max-width:260px; border-left:none; transform:translateZ(0); will-change:transform;}
+/* Two-tier sticky header — a Year row (spanning its 12 months) above a
+   Month row, so a continuous multi-year timeline still reads clearly at a
+   glance (Level 1: Year, Level 2: Month). The Year row sticks to the very
+   top; the Month row sticks just beneath it, offset by the Year row's own
+   fixed height (kept in sync with sch-year-h's height below) so the two
+   never overlap while scrolling vertically. */
+.sch-year-h{position:sticky; top:0; z-index:5; height:26px; box-sizing:border-box; font-size:12px; font-weight:700; border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:translateZ(0); will-change:transform;}
+.sch-year-h.sch-year-current{background:var(--sch-current-bg-strong); color:var(--accent-ink); box-shadow:inset 0 -2px 0 var(--accent);}
 /* z-index 5 (not 3) for the same reason as .sch-activity-cell below: it
    must stay above a bar's day-count label (.sch-seg-label, z-index 3),
    otherwise scrolling the timeline DOWN slides a bar's floating label up
    over this sticky month-header row instead of being covered by it. */
-.sch-month-h{position:sticky; top:0; z-index:5; font-size:12px;}
+.sch-month-h{position:sticky; top:26px; z-index:5; font-size:10.5px; transform:translateZ(0); will-change:transform;}
 .sch-month-h.sch-alt{background:var(--paper-alt, var(--paper));}
 .sch-month-h.sch-month-current{background:var(--sch-current-bg-strong); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent);}
+.sch-year-end{border-right:2px solid var(--muted);}
 /* z-index 5 — must stay above a bar's day-count label (.sch-seg-label,
    z-index 3) and its hovered/focused segment (.sch-seg:hover, z-index 2),
    otherwise scrolling the timeline sideways slides a bar's floating label
    out past the end of its own column and over this sticky Activities
    panel instead of being covered by it. */
-.sch-activity-cell{position:sticky; left:0; z-index:5; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top;}
+.sch-activity-cell{position:sticky; left:0; z-index:5; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top; transform:translateZ(0); will-change:transform;}
 .sch-name{font-weight:500; font-size:12.5px; margin-bottom:3px; white-space:normal; word-break:break-word;}
 .sch-category{font-size:11px; color:var(--muted); margin-bottom:3px; white-space:normal; word-break:break-word;}
 .sch-dates{font-size:11px; color:var(--muted); margin-bottom:5px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .sch-chips{display:flex; flex-wrap:wrap; gap:5px; align-items:center;}
-.sch-bar-cell{position:relative; padding:0; border-bottom:1px solid var(--line); height:72px;}
+.sch-bar-cell{position:relative; padding:0; border-bottom:1px solid var(--line); height:88px;}
 .sch-bar-track{position:relative; height:100%; background-image:repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent 100%);}
 /* One activity = one continuous bar made of up to three adjoining
    segments (see renderScheduleTimeline in app.js): planned (blue),
@@ -308,7 +329,7 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
    its neighbors, all at the same vertical position, so together they
    read as a single strip rather than stacked bars. */
 .sch-seg{
-  position:absolute; top:26px; height:20px; cursor:pointer;
+  position:absolute; top:28px; height:32px; cursor:pointer;
   opacity:.94; box-shadow:0 1px 2px rgba(0,0,0,.15);
   border-top:1px solid var(--paper); border-bottom:1px solid var(--paper);
   transition:transform .1s, opacity .1s;
@@ -328,13 +349,30 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
    always sit on top of every segment's color, never hidden underneath a
    neighboring segment. */
 .sch-seg-label{
-  position:absolute; top:27.5px; height:17px; transform:translateX(-50%);
+  position:absolute; top:34px; height:20px; transform:translateX(-50%);
   display:flex; align-items:center; justify-content:center; white-space:nowrap;
-  font-size:9.5px; font-weight:700; color:#fff; letter-spacing:.2px;
+  font-size:11px; font-weight:700; color:#fff; letter-spacing:.2px;
   text-shadow:0 1px 1px rgba(0,0,0,.3);
-  border-radius:4px; padding:0 5px; box-shadow:0 1px 2px rgba(0,0,0,.25);
+  border-radius:4px; padding:0 6px; box-shadow:0 1px 2px rgba(0,0,0,.25);
   pointer-events:none; z-index:3;
 }
+/* Main Activity + Sub-activities (phases) — a parent row with no bar of its
+   own, followed by one indented, numbered row per phase ("1.1 Tender",
+   "1.2 Design", …), each with its own bar drawn exactly like the automatic
+   Planned bar above (same .sch-seg/.sch-seg-label), just colored per phase
+   name (see phaseColor in app.js) and sized to that phase's own dates. */
+.sch-row-no{color:var(--muted); font-weight:600;}
+.sch-parent-cell .sch-name{font-weight:700;}
+.sch-subrow .sch-bar-cell, .sch-subrow .sch-activity-cell{border-bottom-style:dashed;}
+.sch-subrow-last .sch-bar-cell, .sch-subrow-last .sch-activity-cell{border-bottom-style:solid;}
+.sch-subrow-cell{padding:6px 12px 6px 26px; background:var(--paper-alt, var(--paper));}
+.sch-subrow-label{font-weight:500; font-size:12px; color:var(--accent-ink, #1d4ed8); white-space:normal; word-break:break-word;}
+.sch-subrow-meta{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:3px;}
+.sch-subrow-dates{font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.sch-subrow-meta .delay-chip{font-size:9.5px; padding:1px 6px;}
+.sch-subrow-bar-cell{height:46px; background:var(--paper-alt, var(--paper));}
+.sch-subrow-bar-cell .sch-seg{top:50%; height:28px; transform:translateY(-50%);}
+.sch-subrow-bar-cell .sch-seg-label{top:50%; height:18px; font-size:10px; transform:translate(-50%, -50%);}
 
 .filters{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
 .filters input[type=search]{
@@ -420,6 +458,43 @@ footer.note{color:var(--muted); font-size:11.5px; text-align:center; padding-top
 }
 .field textarea{resize:vertical; min-height:44px;}
 .field input:disabled{opacity:.7;}
+/* Sub-activities (phases) editor on the Add/Edit Activity form — a short
+   repeatable list of phase cards, each carrying the same fields as a Main
+   Activity (name, Status, Planned Start/End, Actual Start/End, Delay end
+   date), added/removed freely; collected into the "SubActivities" Sheet tab
+   on save. */
+.subact-rows{display:flex; flex-direction:column; gap:10px; margin-bottom:8px;}
+.subact-row{
+  border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--paper-alt, var(--paper));
+}
+.subact-row-top{display:grid; grid-template-columns:1.6fr 1fr auto; gap:8px; align-items:center;}
+.subact-row-top .sa-name, .subact-row-top .sa-status{
+  border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:var(--paper); color:var(--ink); font-family:inherit;
+}
+.subact-row-grid{
+  display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-top:8px;
+}
+.subact-minifield{
+  display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--muted); font-weight:600;
+}
+.subact-minifield input{
+  border:1px solid var(--line); border-radius:8px; padding:6px 8px; background:var(--paper); color:var(--ink); font-family:inherit; font-weight:400; font-size:13px;
+}
+@media (max-width:900px){
+  .subact-row-grid{grid-template-columns:1fr 1fr;}
+}
+@media (max-width:700px){
+  .subact-row-top{grid-template-columns:1fr 1fr; grid-template-areas:"name name" "status remove";}
+  .subact-row-top .sa-name{grid-area:name;}
+  .subact-row-top .sa-status{grid-area:status;}
+  .subact-row-top .subact-remove{grid-area:remove; justify-self:end;}
+}
+.subact-row .subact-remove{
+  border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--muted);
+  width:34px; height:34px; cursor:pointer; font-size:14px; line-height:1;
+}
+.subact-row .subact-remove:hover{color:var(--st-delayed); border-color:var(--st-delayed);}
+.subact-empty-hint{font-size:12px; color:var(--muted); font-style:italic;}
 .form-actions{display:flex; gap:10px; margin-top:18px;}
 .btn-primary{background:var(--accent); border-color:var(--accent); color:#fff;}
 .btn-primary:hover{border-color:var(--accent-ink); background:var(--accent-ink);}

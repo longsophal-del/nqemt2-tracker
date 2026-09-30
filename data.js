@@ -128,7 +128,26 @@ const SAMPLE_ACTIVITIES = [
   {"id":"125","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-07","endDate":"2026-12-11","startDay":7,"endDay":11,"activity":"Coaching","category":"Coaching","categoryGroup":"Coaching","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"Dr. Chanthou","supportingTeam":"District health office","priority":"Medium","delayOverrideDays":"","delayEndDate":""},
   {"id":"126","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-16","endDate":"2026-12-16","startDay":16,"endDay":16,"activity":"Annual Workshop","category":"Workshop","categoryGroup":"Training & Workshops","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":"","delayEndDate":""},
   {"id":"127","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-03","endDate":"2026-12-03","startDay":3,"endDay":3,"activity":"OD Assessors on Tool","category":"Assessment","categoryGroup":"Assessment","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":"","delayEndDate":""},
-  {"id":"128","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-14","endDate":"2026-12-14","startDay":14,"endDay":14,"activity":"QIWG Validation","category":"QIWG","categoryGroup":"QIWG","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":"","delayEndDate":""}
+  {"id":"128","year":2026,"month":12,"monthName":"Dec","startDate":"2026-12-14","endDate":"2026-12-14","startDay":14,"endDay":14,"activity":"QIWG Validation","category":"QIWG","categoryGroup":"QIWG","status":"Planned","notes":"","actualStart":"","actualEnd":"","description":"","responsiblePerson":"","supportingTeam":"","priority":"Medium","delayOverrideDays":"","delayEndDate":""},
+  {"id":"129","year":2026,"month":3,"monthName":"Mar","startDate":"2026-03-01","endDate":"2027-05-20","startDay":1,"endDay":20,"activity":"Selection consulting firm for design and construction supervision","category":"Other","categoryGroup":"Other","status":"In Progress","notes":"Demo: shows the Main Activity + Sub-activities (phases) feature — see SAMPLE_SUB_ACTIVITIES below.","actualStart":"2026-03-01","actualEnd":"","description":"Recruit and mobilize the design and construction-supervision consulting firm.","responsiblePerson":"Mr. Long Sophal","supportingTeam":"Provincial QI team","priority":"High","delayOverrideDays":"","delayEndDate":""}
+];
+
+// Optional per-activity phase breakdown for the Activity Timeline (see
+// "Main Activity + Sub-activities" in app.js's renderScheduleTimeline).
+// Each row is one named phase belonging to one activity (activityId matches
+// that activity's own id above) and carries the same Planned/Actual/Status/
+// Delay fields as a Main Activity — startDate/endDate (Planned Start/End),
+// actualStart/actualEnd, status, and delayEndDate (used only once a phase's
+// own status is "Stuck") — so each phase's bar and Status chip are computed
+// exactly like a Main Activity's. An activity with no rows here just keeps
+// showing its automatic Planned/Actual bar. The four rows below deliberately
+// span Stuck, In Progress, and Planned so the demo shows all three bar
+// colors on this one activity's phases.
+const SAMPLE_SUB_ACTIVITIES = [
+  {"id":"1","activityId":"129","name":"Tender","startDate":"2026-03-01","endDate":"2026-05-31","actualStart":"2026-03-03","actualEnd":"","status":"Stuck","delayEndDate":"2026-06-20","order":1},
+  {"id":"2","activityId":"129","name":"Design","startDate":"2026-06-01","endDate":"2026-10-31","actualStart":"2026-06-05","actualEnd":"","status":"In Progress","delayEndDate":"","order":2},
+  {"id":"3","activityId":"129","name":"Construction and Supervision","startDate":"2026-11-01","endDate":"2027-04-30","actualStart":"","actualEnd":"","status":"Planned","delayEndDate":"","order":3},
+  {"id":"4","activityId":"129","name":"Reporting","startDate":"2027-05-01","endDate":"2027-05-20","actualStart":"","actualEnd":"","status":"Planned","delayEndDate":"","order":4}
 ];
 
 // Bundled sample category list — used only until config.js's API_URL points at
