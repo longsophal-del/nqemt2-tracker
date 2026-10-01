@@ -1095,7 +1095,16 @@
         var sLeft = schedulePx(layout, scs, false);
         var sRight = schedulePx(layout, sce, true);
         var sWidth = Math.max(sRight - sLeft, 2.5); // always at least a visible/clickable sliver
-        var segDays = diffDays(seg.end, seg.start) + 1;
+        // "planned"/"progress" segments are genuine inclusive date spans (both
+        // endpoints are real days the activity is scheduled/worked), so their
+        // day count is the usual diffDays+1. A "delay"/"stuck" segment's
+        // `start`, though, is always exactly Planned End — the very day
+        // already counted as the LAST day of the planned/progress segment
+        // right before it — so counting it again here with +1 double-counts
+        // that shared boundary day (e.g. deadline Sep 30, today Oct 1 is 1
+        // day overdue, not 2). Only the days strictly AFTER Planned End are
+        // real delay days, hence no +1 for these two classes.
+        var segDays = (seg.cls === "delay" || seg.cls === "stuck") ? diffDays(seg.end, seg.start) : diffDays(seg.end, seg.start) + 1;
         var segLabel = segDays + "d";
         var labelCenter = sLeft + sWidth / 2;
         var segColor = cssVar(SEG_COLOR_VAR[seg.cls]);
