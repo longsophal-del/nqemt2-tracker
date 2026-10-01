@@ -442,7 +442,6 @@ input.notes-input:focus, input.date-input:focus{border-color:var(--accent); back
 .save-flag{font-size:10px; color:var(--accent-ink); margin-left:6px; opacity:0; transition:opacity .3s;}
 .save-flag.show{opacity:1;}
 
-footer.note{color:var(--muted); font-size:11.5px; text-align:center; padding-top:6px;}
 .sync-banner{
   background:rgba(229,72,77,0.12); border:1px solid var(--st-delayed);
   color:var(--ink); border-radius:10px; padding:10px 14px; font-size:12.5px;
