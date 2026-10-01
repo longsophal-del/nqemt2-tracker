@@ -1156,7 +1156,7 @@
 
       var mainRowHtml = '<tr>' +
         '<td class="sch-activity-cell' + (subs.length ? " sch-parent-cell" : "") + '">' +
-          '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + (subs.length ? ('<span class="sch-row-no">' + rowNo + '.</span> ') : "") + escapeHtml(d.activity) + '</div>' +
+          '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + '<span class="sch-row-no">' + rowNo + '.</span> ' + escapeHtml(d.activity) + '</div>' +
           '<div class="sch-category" title="Budget category: ' + escapeHtml(d.category || "—") + '">' + escapeHtml(d.category || "—") + '</div>' +
           '<div class="sch-dates" title="Budget period: ' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '">' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '</div>' +
           '<div class="sch-chips">' +
