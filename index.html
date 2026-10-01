@@ -130,12 +130,13 @@
           <div class="hint" id="scheduleHint">Full-year Gantt view — click a bar for activity details.</div>
           <div class="status-summary" id="scheduleStatusSummary"></div>
           <div class="filters sch-filters">
+            <input type="search" id="schNameSearch" list="schActivityNamesList" placeholder="Search activity name…" autocomplete="off">
+            <datalist id="schActivityNamesList"></datalist>
             <select id="schYear"></select>
-            <select id="schMonth"><option value="">All months</option></select>
             <select id="schCategory"><option value="">All categories</option></select>
             <select id="schResponsible"><option value="">All responsible people</option></select>
             <select id="schStatus"><option value="">All statuses</option></select>
-            <button class="btn" id="schReset" title="Clear category/responsible/status/month filters">✕ Reset filters</button>
+            <button class="btn" id="schReset" title="Clear search/category/responsible/status filters">✕ Reset filters</button>
           </div>
           <div class="sch-outer" id="scheduleOuter"></div>
           <div class="tl-legend legend" id="scheduleLegend"></div>

@@ -417,7 +417,7 @@
     // continuous range across all activity/sub-activity dates. It's kept
     // here only as the last value picked in the "Jump to year" control
     // (see wireScheduleFilters/scrollScheduleToYear).
-    sch: { year: null, month: "", category: "", responsible: "", status: "", _layout: null },
+    sch: { year: null, search: "", category: "", responsible: "", status: "", _layout: null },
     act: { search: "", year: "", category: "", responsible: "", status: "", sortKey: "start", sortDir: "asc", page: 1, pageSize: 25 },
     editingId: null,
     duplicating: false
@@ -430,7 +430,7 @@
       "sidebar", "sidebarBackdrop", "hamburgerBtn", "mainNav", "routeTitle", "exportBtn", "syncBanner", "sidebarSync",
       "searchInput", "filterYear", "filterCategory", "filterResponsible", "filterStatus", "rowCount", "tableBody", "pagination",
       "categoriesTableBody", "categoryCount", "addCategoryBtn",
-      "schYear", "schMonth", "schCategory", "schResponsible", "schStatus", "schReset",
+      "schYear", "schNameSearch", "schActivityNamesList", "schCategory", "schResponsible", "schStatus", "schReset",
       "scheduleHint", "scheduleStatusSummary", "scheduleOuter", "scheduleLegend",
       "addFormTitle", "addFormHint", "activityForm", "idField", "fId", "fName", "fDescription", "fCategory",
       "fResponsible", "responsibleList", "fSupporting", "supportingList", "fPriority", "fStatus",
@@ -993,21 +993,27 @@
   function populateScheduleFilterOptions() {
     var cats = uniqueSorted(state.docs, function (d) { return d.category; });
     var people = uniqueSorted(state.docs, function (d) { return d.responsiblePerson; });
+    // Main-activity names only (not sub-activity/phase names) — feeds the
+    // <datalist> behind the "Search activity name" box below, so typing
+    // there autofills/suggests from the real list of Main Activities.
+    var names = uniqueSorted(state.docs, function (d) { return d.activity; });
     els.schCategory.innerHTML = '<option value="">All categories</option>' + cats.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join("");
     els.schResponsible.innerHTML = '<option value="">All responsible people</option>' + people.map(function (p) { return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>'; }).join("");
     els.schStatus.innerHTML = '<option value="">All statuses</option>' + STATUS_LIST.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
+    els.schActivityNamesList.innerHTML = names.map(function (n) { return '<option value="' + escapeHtml(n) + '"></option>'; }).join("");
     els.schCategory.value = state.sch.category || "";
     els.schResponsible.value = state.sch.responsible || "";
     els.schStatus.value = state.sch.status || "";
-    els.schMonth.value = state.sch.month || "";
+    els.schNameSearch.value = state.sch.search || "";
     // schYear's own <option>s (the years actually spanned) are filled in by
     // renderScheduleTimeline, since that's where the layout range is known.
   }
 
   function getScheduleDocs() {
     var f = state.sch;
+    var q = (f.search || "").trim().toLowerCase();
     return state.docs.filter(function (d) {
-      if (f.month && String(d.month) !== String(f.month)) return false;
+      if (q && (d.activity || "").toLowerCase().indexOf(q) === -1) return false;
       if (f.category && d.category !== f.category) return false;
       if (f.responsible && d.responsiblePerson !== f.responsible) return false;
       if (f.status && d.status !== f.status) return false;
@@ -1136,6 +1142,7 @@
       var hasDelayOverride = delayOverride != null && !isNaN(delayOverride) && delayOverride > 0;
 
       var tip = escapeHtml(d.activity) +
+        (d.description ? "\nDescription: " + escapeHtml(d.description) : "") +
         "\nResponsible Person: " + escapeHtml(d.responsiblePerson || "—") +
         "\nCategory: " + escapeHtml(d.category || "—") +
         "\nPlanned: " + prettyDate(d.startDate) + " – " + prettyDate(d.endDate) + (bar.budgetDays != null ? " (" + bar.budgetDaysLabel + ")" : "") +
@@ -1163,7 +1170,7 @@
 
       var mainRowHtml = '<tr>' +
         '<td class="sch-activity-cell ' + groupCls + (subs.length ? " sch-parent-cell" : "") + '">' +
-          '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + '<span class="sch-row-no">' + rowNo + '.</span> ' + escapeHtml(d.activity) + '</div>' +
+          '<div class="sch-name" title="' + tip + '">' + '<span class="sch-row-no">' + rowNo + '.</span> ' + escapeHtml(d.activity) + '</div>' +
           '<div class="sch-category" title="Budget category: ' + escapeHtml(d.category || "—") + '">' + escapeHtml(d.category || "—") + '</div>' +
           '<div class="sch-main-meta">' +
             '<span class="sch-dates" title="Budget period: ' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '">' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '</span>' +
@@ -1289,10 +1296,6 @@
   }
 
   function wireScheduleFilters() {
-    for (var mm = 1; mm <= 12; mm++) {
-      var o = document.createElement("option"); o.value = mm; o.textContent = MONTH_ABBR[mm - 1];
-      els.schMonth.appendChild(o);
-    }
     // schYear is a "Jump to year" convenience, not a filter — the timeline
     // now always shows its full continuous range at once (see Q&A that
     // shaped this feature). Its own <option>s are (re)populated inside
@@ -1301,9 +1304,16 @@
       var y = parseInt(els.schYear.value, 10);
       if (y) scrollScheduleToYear(y);
     });
-    ["schMonth", "schCategory", "schResponsible", "schStatus"].forEach(function (id) {
+    // Search-as-you-type by Main Activity name, same "input" pattern as the
+    // Activities page's own search box — the <datalist> wired to this input
+    // (see populateScheduleFilterOptions) autofills/suggests from the real
+    // list of Main Activity names as the user types.
+    els.schNameSearch.addEventListener("input", function () {
+      state.sch.search = els.schNameSearch.value;
+      renderScheduleTimeline();
+    });
+    ["schCategory", "schResponsible", "schStatus"].forEach(function (id) {
       els[id].addEventListener("change", function () {
-        state.sch.month = els.schMonth.value;
         state.sch.category = els.schCategory.value;
         state.sch.responsible = els.schResponsible.value;
         state.sch.status = els.schStatus.value;
@@ -1311,7 +1321,7 @@
       });
     });
     els.schReset.addEventListener("click", function () {
-      state.sch.month = ""; state.sch.category = ""; state.sch.responsible = ""; state.sch.status = "";
+      state.sch.search = ""; state.sch.category = ""; state.sch.responsible = ""; state.sch.status = "";
       populateScheduleFilterOptions();
       renderScheduleTimeline();
     });

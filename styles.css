@@ -25,6 +25,15 @@
   --shadow: 0 1px 2px rgba(24,43,42,0.06), 0 4px 14px rgba(24,43,42,0.06);
   --sch-current-bg: rgba(14,124,116,0.10);
   --sch-current-bg-strong: rgba(14,124,116,0.20);
+  /* OPAQUE equivalent of --sch-current-bg-strong, for the sticky current-
+     year/current-month header cells specifically (see .sch-year-current/
+     .sch-month-current below). Those headers sit on top of table rows that
+     scroll underneath them — a translucent (rgba) background there lets a
+     colorful bar segment from the scrolled-under row visibly bleed/show
+     through the header as it passes behind it. A solid color has nothing
+     to blend with, so it always fully occludes whatever scrolls beneath.
+     Pre-mixed to look the same as the translucent version over --surface. */
+  --sch-current-header-bg: #CFE5E3;
   /* Alternating per-Main-Activity row banding on the Activity Timeline —
      see .sch-row-a/.sch-row-b below. Group A matches the existing default
      surface color (no visual change for the first/every-other activity);
@@ -43,6 +52,7 @@
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
     --sch-current-bg: rgba(63,187,174,0.16);
     --sch-current-bg-strong: rgba(63,187,174,0.30);
+    --sch-current-header-bg: #245651;
     --sch-row-a: var(--surface); --sch-row-b: #1F3330;
   }
 }
@@ -56,6 +66,7 @@
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
   --sch-current-bg: rgba(63,187,174,0.16);
   --sch-current-bg-strong: rgba(63,187,174,0.30);
+  --sch-current-header-bg: #245651;
   --sch-row-a: var(--surface); --sch-row-b: #1F3330;
 }
 
@@ -286,7 +297,7 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
    individual table-cell boundaries.
    ========================================================================== */
 .sch-filters{margin-bottom:10px;}
-.sch-outer{overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px;}
+.sch-outer{overflow:auto; max-height:82vh; border:1px solid var(--line); border-radius:10px;}
 .sch-table{border-collapse:separate; border-spacing:0; width:max-content;}
 .sch-table th{font-size:11px; font-weight:600; color:var(--muted); background:var(--paper); padding:6px 4px; text-align:center; border-bottom:1px solid var(--line); border-left:1px solid var(--line); white-space:nowrap;}
 /* transform:translateZ(0) (plus will-change) forces each sticky header/
@@ -309,14 +320,14 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
    fixed height (kept in sync with sch-year-h's height below) so the two
    never overlap while scrolling vertically. */
 .sch-year-h{position:sticky; top:0; z-index:5; height:26px; box-sizing:border-box; font-size:12px; font-weight:700; border-left:1px solid var(--line); border-bottom:1px solid var(--line); transform:translateZ(0); will-change:transform;}
-.sch-year-h.sch-year-current{background:var(--sch-current-bg-strong); color:var(--accent-ink); box-shadow:inset 0 -2px 0 var(--accent);}
+.sch-year-h.sch-year-current{background:var(--sch-current-header-bg); color:var(--accent-ink); box-shadow:inset 0 -2px 0 var(--accent);}
 /* z-index 5 (not 3) for the same reason as .sch-activity-cell below: it
    must stay above a bar's day-count label (.sch-seg-label, z-index 3),
    otherwise scrolling the timeline DOWN slides a bar's floating label up
    over this sticky month-header row instead of being covered by it. */
 .sch-month-h{position:sticky; top:26px; z-index:5; font-size:10.5px; transform:translateZ(0); will-change:transform;}
 .sch-month-h.sch-alt{background:var(--paper-alt, var(--paper));}
-.sch-month-h.sch-month-current{background:var(--sch-current-bg-strong); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent);}
+.sch-month-h.sch-month-current{background:var(--sch-current-header-bg); color:var(--accent-ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent);}
 .sch-year-end{border-right:2px solid var(--muted);}
 /* z-index 5 — must stay above a bar's day-count label (.sch-seg-label,
    z-index 3) and its hovered/focused segment (.sch-seg:hover, z-index 2),
