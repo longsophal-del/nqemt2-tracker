@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Activity Management</title>
-<meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): activity timeline, activities, and reports, backed by Google Sheets.">
+<meta name="description" content="Activity management system for the NQEMT-2 programme schedule (2024–2026): activity timeline and activities, backed by Google Sheets.">
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
@@ -47,7 +47,6 @@
       <button class="nav-item" data-route="activities">📋 <span>Activities</span></button>
       <button class="nav-item" data-route="add">➕ <span>Add Activity</span></button>
       <button class="nav-item" data-route="categories">🏷️ <span>Category</span></button>
-      <button class="nav-item" data-route="reports">📈 <span>Reports</span></button>
       <button class="nav-item" data-route="settings">⚙️ <span>Settings</span></button>
     </nav>
     <div class="sidebar-foot" id="sidebarSync">—</div>
@@ -229,16 +228,6 @@
               <button type="button" class="btn" id="formCancelBtn" hidden>Cancel edit</button>
             </div>
           </form>
-        </section>
-      </section>
-
-      <!-- ============ REPORTS (Phase 2) ============ -->
-      <section id="view-reports" class="view" hidden>
-        <section>
-          <h2>Reports</h2>
-          <div class="placeholder-card">
-            📈 Reports are coming in the next update — Monthly Activity, Activity Status, Delay, Responsible Person, Category, and Planned vs. Actual reports, each with filters and export.
-          </div>
         </section>
       </section>
 

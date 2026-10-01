@@ -42,7 +42,6 @@
     categories: "Category",
     schedule: "Activity Timeline",
     add: "Add activity",
-    reports: "Reports",
     settings: "Settings"
   };
 
