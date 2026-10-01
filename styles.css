@@ -25,6 +25,12 @@
   --shadow: 0 1px 2px rgba(24,43,42,0.06), 0 4px 14px rgba(24,43,42,0.06);
   --sch-current-bg: rgba(14,124,116,0.10);
   --sch-current-bg-strong: rgba(14,124,116,0.20);
+  /* Alternating per-Main-Activity row banding on the Activity Timeline —
+     see .sch-row-a/.sch-row-b below. Group A matches the existing default
+     surface color (no visual change for the first/every-other activity);
+     Group B is a subtle, distinguishable tint. */
+  --sch-row-a: var(--surface);
+  --sch-row-b: #EEF2F7;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -37,6 +43,7 @@
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
     --sch-current-bg: rgba(63,187,174,0.16);
     --sch-current-bg-strong: rgba(63,187,174,0.30);
+    --sch-row-a: var(--surface); --sch-row-b: #1F3330;
   }
 }
 :root[data-theme="dark"]{
@@ -49,6 +56,7 @@
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 18px rgba(0,0,0,0.35);
   --sch-current-bg: rgba(63,187,174,0.16);
   --sch-current-bg-strong: rgba(63,187,174,0.30);
+  --sch-row-a: var(--surface); --sch-row-b: #1F3330;
 }
 
 *{box-sizing:border-box;}
@@ -318,8 +326,11 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .sch-activity-cell{position:sticky; left:0; z-index:5; background:var(--surface); border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 12px; min-width:220px; max-width:260px; vertical-align:top; transform:translateZ(0); will-change:transform;}
 .sch-name{font-weight:500; font-size:12.5px; margin-bottom:3px; white-space:normal; word-break:break-word;}
 .sch-category{font-size:11px; color:var(--muted); margin-bottom:3px; white-space:normal; word-break:break-word;}
-.sch-dates{font-size:11px; color:var(--muted); margin-bottom:5px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.sch-chips{display:flex; flex-wrap:wrap; gap:5px; align-items:center;}
+/* Planned dates + Status chip sit on one line, in that order — same
+   left-to-right pattern as a Sub-activity row's own meta line below
+   (.sch-subrow-meta), so a Main Activity and its phases read consistently. */
+.sch-main-meta{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:3px;}
+.sch-dates{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
 .sch-bar-cell{position:relative; padding:0; border-bottom:1px solid var(--line); height:88px;}
 .sch-bar-track{position:relative; height:100%; background-image:repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent 100%);}
 /* One activity = one continuous bar made of up to three adjoining
@@ -370,9 +381,18 @@ section > .hint{color:var(--muted); font-size:12.5px; margin-bottom:12px;}
 .sch-subrow-meta{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:3px;}
 .sch-subrow-dates{font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
 .sch-subrow-meta .delay-chip{font-size:9.5px; padding:1px 6px;}
-.sch-subrow-bar-cell{height:46px; background:var(--paper-alt, var(--paper));}
+.sch-subrow-bar-cell{height:46px;}
 .sch-subrow-bar-cell .sch-seg{top:50%; height:28px; transform:translateY(-50%);}
 .sch-subrow-bar-cell .sch-seg-label{top:50%; height:18px; font-size:10px; transform:translate(-50%, -50%);}
+/* Alternating per-Main-Activity row banding — a Main Activity's own row and
+   every one of its Sub-activity rows share the same sch-row-a/sch-row-b
+   class (assigned once per Main Activity in app.js), so the whole family of
+   rows reads as one visual band and it's easy to see at a glance where one
+   Main Activity's phases end and the next Main Activity begins. Declared
+   after .sch-activity-cell/.sch-subrow-cell/.sch-subrow-bar-cell above so it
+   wins the same-specificity cascade and actually overrides their background. */
+.sch-row-a{background:var(--sch-row-a);}
+.sch-row-b{background:var(--sch-row-b);}
 
 .filters{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
 .filters input[type=search]{

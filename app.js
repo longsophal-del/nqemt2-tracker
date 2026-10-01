@@ -1154,16 +1154,23 @@
       // Phase", "1.2 Design Phase", … rows, each carrying its own bar.
       var barHtml = subs.length ? "" : renderBarSegmentsHtml(bar.segRanges, d.id, tip);
 
+      // One alternating "group" tint per Main Activity (not per table row) —
+      // a Main Activity's own row AND every one of its Sub-activity rows
+      // share the same sch-row-a/sch-row-b class, so a quick glance down the
+      // Activities column shows exactly where one Main Activity's phases end
+      // and the next Main Activity begins, even across many phase rows.
+      var groupCls = (rowIdx % 2 === 0) ? "sch-row-a" : "sch-row-b";
+
       var mainRowHtml = '<tr>' +
-        '<td class="sch-activity-cell' + (subs.length ? " sch-parent-cell" : "") + '">' +
+        '<td class="sch-activity-cell ' + groupCls + (subs.length ? " sch-parent-cell" : "") + '">' +
           '<div class="sch-name" title="' + escapeHtml(d.activity) + '">' + '<span class="sch-row-no">' + rowNo + '.</span> ' + escapeHtml(d.activity) + '</div>' +
           '<div class="sch-category" title="Budget category: ' + escapeHtml(d.category || "—") + '">' + escapeHtml(d.category || "—") + '</div>' +
-          '<div class="sch-dates" title="Budget period: ' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '">' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '</div>' +
-          '<div class="sch-chips">' +
+          '<div class="sch-main-meta">' +
+            '<span class="sch-dates" title="Budget period: ' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '">' + escapeHtml(fmtRange(d.startDate, d.endDate)) + '</span>' +
             '<span class="delay-chip dc-' + info.code + '">' + escapeHtml(delayText) + '</span>' +
           '</div>' +
         '</td>' +
-        '<td class="sch-bar-cell" colspan="' + layout.totalMonths + '">' +
+        '<td class="sch-bar-cell ' + groupCls + '" colspan="' + layout.totalMonths + '">' +
           '<div class="sch-bar-track" style="width:' + gridWidth + 'px; background-image:' + trackBgImage + '; background-size:' + trackBgSize + ';">' + barHtml + '</div>' +
         '</td>' +
         '</tr>';
@@ -1176,7 +1183,8 @@
         // exact same buildActivityBarSegments()/renderBarSegmentsHtml() path
         // as the Main Activity's own bar (blue Planned, green In Progress,
         // red auto-Delay, brown Stuck) — no longer a single block colored by
-        // phase name.
+        // phase name. It also carries the same groupCls as its parent, so
+        // the whole family of rows reads as one visual band.
         subRowsHtml = subs.map(function (sa, si) {
           var subNo = rowNo + "." + (si + 1);
           var saBar = buildActivityBarSegments(sa, today);
@@ -1189,14 +1197,14 @@
             "\nStatus: " + escapeHtml(sa.status);
           var segHtmlAndLabels = renderBarSegmentsHtml(saBar.segRanges, d.id, phTip);
           return '<tr class="sch-subrow' + (si === subs.length - 1 ? " sch-subrow-last" : "") + '">' +
-            '<td class="sch-activity-cell sch-subrow-cell">' +
+            '<td class="sch-activity-cell sch-subrow-cell ' + groupCls + '">' +
               '<div class="sch-subrow-label"><span class="sch-row-no">' + subNo + '</span> ' + escapeHtml(sa.name || ("Phase " + (si + 1))) + '</div>' +
               '<div class="sch-subrow-meta">' +
                 '<span class="sch-subrow-dates">' + escapeHtml(fmtRange(sa.startDate, sa.endDate)) + '</span>' +
                 '<span class="delay-chip dc-' + saInfo.code + '">' + escapeHtml(saInfo.label) + '</span>' +
               '</div>' +
             '</td>' +
-            '<td class="sch-bar-cell sch-subrow-bar-cell" colspan="' + layout.totalMonths + '">' +
+            '<td class="sch-bar-cell sch-subrow-bar-cell ' + groupCls + '" colspan="' + layout.totalMonths + '">' +
               '<div class="sch-bar-track" style="width:' + gridWidth + 'px; background-image:' + trackBgImage + '; background-size:' + trackBgSize + ';">' + segHtmlAndLabels + '</div>' +
             '</td>' +
             '</tr>';
